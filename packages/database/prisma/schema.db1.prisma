@@ -1,0 +1,119 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-db1"
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  CASHIER
+  CUSTOMER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(CUSTOMER)
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  orders    Order[]
+
+  @@map("users")
+}
+
+model Store {
+  id        String   @id @default(uuid())
+  name      String
+  location  String
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  products  Product[]
+  orders    Order[]
+
+  @@map("stores")
+}
+
+model Product {
+  id           String      @id @default(uuid())
+  name         String      @map("name")
+  description  String?
+  price        Float
+  costPrice    Float       @default(0.0) @map("cost_price")
+  profitMargin Float       @default(0.0) @map("profit_margin")
+  stock        Int         @default(0)
+  sku          String?     @unique
+  category     String?     @default("General")
+  images       String[]    @default([])
+  odooId       Int?        @map("odoo_id")
+  
+  // Unstitched Specs (Optional for Lawn/Cotton 3-Piece suits)
+  isUnstitched Boolean     @default(false) @map("is_unstitched")
+  shirtLength  String?     @map("shirt_length")
+  dupattaLength String?    @map("dupatta_length")
+  trouserLength String?    @map("trouser_length")
+  patches      String?
+
+  storeId      String?     @map("store_id")
+  store        Store?      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @default(now()) @updatedAt @map("updated_at")
+  orderItems   OrderItem[]
+
+  @@map("products")
+}
+
+enum OrderType {
+  ONLINE
+  POS_COUNTER
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  totalAmount Float       @map("total_amount")
+  type        OrderType   @default(ONLINE)
+  status      OrderStatus @default(PENDING)
+  
+  userId      String?     @map("user_id")
+  user        User?       @relation(fields: [userId], references: [id])
+  
+  storeId     String?     @map("store_id")
+  store       Store?      @relation(fields: [storeId], references: [id])
+
+  items       OrderItem[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  quantity  Int
+  price     Float
+
+  orderId   String   @map("order_id")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}

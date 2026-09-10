@@ -1,0 +1,121 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-db2"
+}
+
+enum EmployeeRole {
+  MANAGER
+  CASHIER
+  SALES_EXECUTIVE
+  HELPER
+  ACCOUNTANT
+}
+
+model Employee {
+  id          String         @id @default(uuid())
+  name        String
+  phone       String         @unique
+  cnic        String?        @unique
+  role        EmployeeRole   @default(SALES_EXECUTIVE)
+  baseSalary  Float          @map("base_salary")
+  storeId     String?        @map("store_id")
+  isDeleted   Boolean        @default(false) @map("is_deleted")
+
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  attendances Attendance[]
+  salaries    SalaryPayout[]
+  leaves      EmployeeLeave[]
+
+  @@map("employees")
+}
+
+model Attendance {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime @default(now())
+  status     String   // PRESENT, ABSENT, LATE, HALF_DAY
+  notes      String?
+
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("employee_attendance")
+}
+
+model SalaryPayout {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  month      String   // e.g. "2026-09"
+  amountPaid Float    @map("amount_paid")
+  bonus      Float    @default(0)
+  deductions Float    @default(0)
+  paidAt     DateTime @default(now()) @map("paid_at")
+
+  @@map("salary_payouts")
+}
+
+model EmployeeLeave {
+  id         String   @id @default(uuid())
+  employeeId String   @map("employee_id")
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  startDate  DateTime @map("start_date")
+  endDate    DateTime @map("end_date")
+  reason     String?
+  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
+
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("employee_leaves")
+}
+
+// Shop Purchases (Buy from Suppliers / Vendors)
+model ShopPurchase {
+  id           String   @id @default(uuid())
+  supplierName String   @map("supplier_name")
+  itemName     String   @map("item_name")
+  quantity     Int
+  totalCost    Float    @map("total_cost")
+  paidAmount   Float    @map("paid_amount")
+  remaining    Float    @default(0)
+  notes        String?
+  purchaseDate DateTime @default(now()) @map("purchase_date")
+
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("shop_purchases")
+}
+
+// Khata (Customer Ledger & Credit/Debit)
+model CustomerKhata {
+  id           String             @id @default(uuid())
+  customerName String             @map("customer_name")
+  phone        String             @unique
+  totalBalance Float              @default(0) @map("total_balance") // Positive = customer owes shop, Negative = shop owes customer
+  
+  transactions KhataTransaction[]
+
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @default(now()) @updatedAt @map("updated_at")
+
+  @@map("customer_khata")
+}
+
+model KhataTransaction {
+  id          String        @id @default(uuid())
+  khataId     String        @map("khata_id")
+  khata       CustomerKhata @relation(fields: [khataId], references: [id], onDelete: Cascade)
+  type        String        // DEBIT (Udhari/Gave product), CREDIT (Vasooli/Received Payment)
+  amount      Float
+  description String?
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  @@map("khata_transactions")
+}

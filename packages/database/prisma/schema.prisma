@@ -1,0 +1,135 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 1. Roles & Users Management (Admin, Cashier, Customer)
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  CASHIER
+  CUSTOMER
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(CUSTOMER)
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  orders    Order[]
+  logs      AuditLog[]
+
+  @@map("users")
+}
+
+// 2. Multi-Store / Physical Shop Management
+model Store {
+  id        String   @id @default(uuid())
+  name      String
+  location  String
+  phone     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  products  Product[]
+  orders    Order[]
+
+  @@map("stores")
+}
+
+// 3. Inventory & Products (E-commerce + POS)
+model Product {
+  id           String      @id @default(uuid())
+  name         String      @map("name")
+  description  String?
+  price        Float
+  stock        Int         @default(0)
+  sku          String?     @unique
+  category     String?     @default("General")
+  images       String[]    @default([])
+  
+  // Unstitched Specs (Optional for Lawn/Cotton 3-Piece suits)
+  isUnstitched Boolean     @default(false) @map("is_unstitched")
+  shirtLength  String?     @map("shirt_length")
+  dupattaLength String?    @map("dupatta_length")
+  trouserLength String?    @map("trouser_length")
+  patches      String?
+
+  storeId      String?     @map("store_id")
+  store        Store?      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @default(now()) @updatedAt @map("updated_at")
+  orderItems   OrderItem[]
+
+  @@map("products")
+}
+
+// 4. Orders (Online E-commerce & Physical POS Counter Sales)
+enum OrderType {
+  ONLINE
+  POS_COUNTER
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  CANCELLED
+}
+
+model Order {
+  id          String      @id @default(uuid())
+  totalAmount Float       @map("total_amount")
+  type        OrderType   @default(ONLINE)
+  status      OrderStatus @default(PENDING)
+  
+  userId      String?     @map("user_id")
+  user        User?       @relation(fields: [userId], references: [id])
+  
+  storeId     String?     @map("store_id")
+  store       Store?      @relation(fields: [storeId], references: [id])
+
+  items       OrderItem[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @default(now()) @updatedAt @map("updated_at")
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid())
+  quantity  Int
+  price     Float
+
+  orderId   String   @map("order_id")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String   @map("product_id")
+  product   Product  @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+// 5. Silent Security & Audit Logs (Super Admin Tracking)
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String   // e.g., "PRODUCT_UPDATED", "STOCK_DEDUCTED"
+  details   String?  // Changes description
+  ipAddress String?  @map("ip_address")
+  
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}

@@ -1,0 +1,40 @@
+{
+  "name": "database",
+  "version": "1.0.0",
+  "description": "Prisma database layer",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "db1:generate": "prisma generate --config=./prisma.db1.config.ts",
+    "db2:generate": "prisma generate --config=./prisma.db2.config.ts",
+    "db3:generate": "prisma generate --config=./prisma.db3.config.ts",
+    "db:generate": "pnpm db1:generate && pnpm db2:generate && pnpm db3:generate",
+    "db1:push": "prisma db push --config=./prisma.db1.config.ts",
+    "db2:push": "prisma db push --config=./prisma.db2.config.ts",
+    "db3:push": "prisma db push --config=./prisma.db3.config.ts",
+    "db:push": "pnpm db1:push && pnpm db2:push && pnpm db3:push",
+    "db1:studio": "prisma studio --config=./prisma.db1.config.ts --port 5555",
+    "db2:studio": "prisma studio --config=./prisma.db2.config.ts --port 5556",
+    "db3:studio": "prisma studio --config=./prisma.db3.config.ts --port 5557",
+    "postinstall": "pnpm db:generate"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.4.1",
+    "@types/pg": "^8.11.11",
+    "prisma": "^7.10.0",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
+    "pg": "^8.23.0"
+  }
+}

@@ -1,0 +1,55 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/@prisma/client-db3"
+}
+
+// Deep Historic Billing Records (Archived to keep main app fast)
+model BillingHistory {
+  id            String   @id @default(uuid())
+  invoiceNumber String   @unique @map("invoice_number")
+  storeId       String?  @map("store_id")
+  customerPhone String?  @map("customer_phone")
+  totalAmount   Float    @map("total_amount")
+  discount      Float    @default(0)
+  tax           Float    @default(0)
+  paymentMode   String   @map("payment_mode") // CASH, CARD, KHATA, ONLINE
+  cashierName   String?  @map("cashier_name")
+  itemDetailsJson String @map("item_details_json") // Compact JSON snapshot of invoice items
+
+  billingDate   DateTime @default(now()) @map("billing_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("billing_history")
+}
+
+// Daily Aggregated Sales Analytics
+model DailySalesAnalytics {
+  id              String   @id @default(uuid())
+  date            DateTime @unique
+  totalSalesCount Int      @map("total_sales_count")
+  totalRevenue    Float    @map("total_revenue")
+  totalProfit     Float    @map("total_profit")
+  topCategory     String?  @map("top_category")
+
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("daily_sales_analytics")
+}
+
+// Super Admin Audit & Monitoring Logs
+model SuperAdminAuditLog {
+  id        String   @id @default(uuid())
+  action    String   // e.g. "DATA_DELETED", "SUPER_ADMIN_ACCESS", "STORAGE_SWAPPED"
+  targetDb  String   @map("target_db") // DB1, DB2, DB3
+  performedBy String @map("performed_by")
+  details   String?
+  ipAddress String?  @map("ip_address")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("super_admin_audit_logs")
+}
