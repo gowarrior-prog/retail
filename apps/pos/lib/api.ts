@@ -77,6 +77,19 @@ export async function createProduct(data: Partial<Product>): Promise<Product> {
   });
 }
 
+export async function updateProduct(id: string, data: Partial<Product>): Promise<Product> {
+  return apiFetch<Product>(`/products/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteProduct(id: string): Promise<any> {
+  return apiFetch<any>(`/products/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function fetchEmployees(): Promise<Employee[]> {
   return apiFetch<Employee[]>('/employees');
 }

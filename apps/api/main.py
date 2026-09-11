@@ -70,6 +70,29 @@ async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.put("/products/{product_id}", response_model=ProductResponse)
+async def update_product(product_id: str, product_update: ProductCreate, db: AsyncSession = Depends(get_db1)):
+    result = await db.execute(select(ProductModel).filter(ProductModel.id == product_id))
+    db_product = result.scalars().first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    try:
+        data = product_update.dict()
+        for k, v in data.items():
+            if v is not None:
+                setattr(db_product, k, v)
+
+        if db_product.price and db_product.cost_price:
+            db_product.profit_margin = ((db_product.price - db_product.cost_price) / db_product.price) * 100
+
+        await db.commit()
+        await db.refresh(db_product)
+        return db_product
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.delete("/products/{product_id}")
 async def delete_product(product_id: str, db: AsyncSession = Depends(get_db1)):
     result = await db.execute(select(ProductModel).filter(ProductModel.id == product_id))

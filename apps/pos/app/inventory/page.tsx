@@ -7,14 +7,13 @@ import {
   Plus,
   RefreshCw,
   ShoppingCart,
-  Layers,
   Check,
   X,
-  Warehouse
+  Edit2,
+  Trash2
 } from 'lucide-react';
 import { useCartStore } from '@/stores/useCartStore';
-import { useProductStore } from '@/stores/useProductStore';
-import { fetchProducts, syncOdoo, createProduct, type Product } from '@/lib/api';
+import { fetchProducts, syncOdoo, createProduct, updateProduct, deleteProduct, type Product } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 
 const FABRIC_CATEGORIES = ['All', 'Lawn', 'Cambric', 'Cotton', 'Khaddar', 'Fancy', 'Shawl'] as const;
@@ -31,6 +30,8 @@ export default function InventoryPage() {
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
   const [newProduct, setNewProduct] = useState({
     name: '',
     category: 'Lawn',
@@ -109,8 +110,7 @@ export default function InventoryPage() {
     const stockNum = parseInt(newProduct.stock, 10) || 0;
     const margin = priceNum > 0 ? Number((((priceNum - costNum) / priceNum) * 100).toFixed(1)) : 0;
 
-    const productPayload: Product = {
-      id: `prod-${Date.now().toString().slice(-6)}`,
+    const productPayload: Partial<Product> = {
       name: newProduct.name,
       price: priceNum,
       cost_price: costNum,
@@ -118,22 +118,41 @@ export default function InventoryPage() {
       category: newProduct.category,
       stock: stockNum,
       barcode: newProduct.barcode || `${newProduct.category.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
-      image_url: null,
-      odoo_id: null,
-      store_id: 'store-1',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
 
     try {
-      await createProduct(productPayload);
+      const saved = await createProduct(productPayload);
+      setProducts((prev) => [saved, ...prev]);
     } catch {
-      // local update
+      setProducts((prev) => [{ id: `prod-${Date.now()}`, ...productPayload } as Product, ...prev]);
     }
 
-    setProducts((prev) => [productPayload, ...prev]);
     setIsAddModalOpen(false);
     setNewProduct({ name: '', category: 'Lawn', price: '', cost_price: '', stock: '', barcode: '' });
+  };
+
+  const handleUpdateProductSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProduct) return;
+
+    try {
+      const updated = await updateProduct(editingProduct.id, editingProduct);
+      setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? updated : p)));
+    } catch {
+      setProducts((prev) => prev.map((p) => (p.id === editingProduct.id ? editingProduct : p)));
+    }
+
+    setEditingProduct(null);
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this product from DB1?')) return;
+    try {
+      await deleteProduct(id);
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err: any) {
+      alert(`Delete Error: ${err.message}`);
+    }
   };
 
   return (
@@ -143,7 +162,7 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
             <Package className="w-5 h-5 text-slate-700" />
-            Inventory & Fabric Catalog
+            Inventory & Fabric Catalog (DB1)
           </h1>
           <p className="text-xs text-slate-500 mt-0.5 font-mono">
             Bilal Cloth & Silk Center — Main Bazar Narowal
@@ -163,6 +182,7 @@ export default function InventoryPage() {
             onClick={handleSyncOdoo}
             disabled={isSyncing}
             className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-lg font-semibold text-xs transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            title="Sync products from Odoo ERP into DB1"
           >
             <RefreshCw className={cn('w-3.5 h-3.5 text-slate-600', isSyncing && 'animate-spin')} />
             <span>{isSyncing ? 'Syncing Odoo...' : 'Sync Odoo ERP'}</span>
@@ -207,12 +227,12 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Product List Table (Clean minimal design, zero dummy images) */}
+      {/* Product List Table (Full DB1 CRUD Support) */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {isLoading ? (
-          <div className="py-12 text-center text-slate-500 text-sm font-mono">Loading inventory catalog...</div>
+          <div className="py-12 text-center text-slate-500 text-sm font-mono">Loading inventory catalog from DB1...</div>
         ) : filteredProducts.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-sm">No products found matching your search.</div>
+          <div className="py-12 text-center text-slate-400 text-sm">No products found in DB1 database. Click "Add Fabric SKU" or "Sync Odoo ERP" to populate catalog.</div>
         ) : (
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase font-mono">
@@ -224,7 +244,7 @@ export default function InventoryPage() {
                 <th className="p-3 text-right">Cost Price</th>
                 <th className="p-3 text-right">Margin %</th>
                 <th className="p-3 text-center">Stock</th>
-                <th className="p-3 text-center">Action</th>
+                <th className="p-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
@@ -247,32 +267,40 @@ export default function InventoryPage() {
                     <td className="p-3 text-right text-slate-500">{formatCurrency(cost)}</td>
                     <td className="p-3 text-right font-bold text-slate-800">+{margin}%</td>
                     <td className="p-3 text-center">
-                      <span
-                        className={cn(
-                          'px-2 py-0.5 rounded font-bold text-[10px]',
-                          (p.stock || 0) > 10
-                            ? 'bg-slate-100 text-slate-800'
-                            : (p.stock || 0) > 0
-                            ? 'bg-slate-200 text-slate-900'
-                            : 'bg-slate-100 text-slate-400'
-                        )}
-                      >
+                      <span className="px-2 py-0.5 rounded font-bold text-[10px] bg-slate-100 text-slate-800">
                         {p.stock || 0} Units
                       </span>
                     </td>
                     <td className="p-3 text-center">
-                      <button
-                        onClick={() => handleAddToCart(p)}
-                        className={cn(
-                          'px-2.5 py-1 rounded text-xs font-semibold transition-colors inline-flex items-center gap-1',
-                          isAdded
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-900 hover:bg-slate-800 text-white'
-                        )}
-                      >
-                        {isAdded ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5" />}
-                        <span>{isAdded ? 'Added' : 'Add'}</span>
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          onClick={() => handleAddToCart(p)}
+                          className={cn(
+                            'px-2 py-1 rounded text-xs font-semibold transition-colors inline-flex items-center gap-1',
+                            isAdded ? 'bg-emerald-600 text-white' : 'bg-slate-900 hover:bg-slate-800 text-white'
+                          )}
+                          title="Add to active POS cart"
+                        >
+                          {isAdded ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5" />}
+                          <span>{isAdded ? 'Added' : 'Add'}</span>
+                        </button>
+
+                        <button
+                          onClick={() => setEditingProduct(p)}
+                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded border border-slate-200"
+                          title="Edit Product in DB1"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => handleDeleteProduct(p.id)}
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-red-200"
+                          title="Delete Product from DB1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -287,7 +315,7 @@ export default function InventoryPage() {
         <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900 text-sm">Add New Fabric SKU</h3>
+              <h3 className="font-bold text-slate-900 text-sm">Add New Fabric SKU to DB1</h3>
               <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
@@ -377,7 +405,99 @@ export default function InventoryPage() {
                   type="submit"
                   className="px-4 py-1.5 rounded bg-slate-900 text-white font-bold hover:bg-slate-800"
                 >
-                  Save Product
+                  Save Product to DB1
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="font-bold text-slate-900 text-sm">Edit Product (DB1)</h3>
+              <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateProductSubmit} className="flex flex-col gap-3 mt-3 text-xs">
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">Fabric Title</label>
+                <input
+                  required
+                  className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none"
+                  value={editingProduct.name}
+                  onChange={(e) => setEditingProduct({ ...editingProduct, name: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Category</label>
+                  <input
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none"
+                    value={editingProduct.category || ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, category: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Barcode / SKU</label>
+                  <input
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                    value={editingProduct.barcode || ''}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, barcode: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Sale Price</label>
+                  <input
+                    required
+                    type="number"
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                    value={editingProduct.price}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, price: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Cost Price</label>
+                  <input
+                    type="number"
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                    value={editingProduct.cost_price || 0}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, cost_price: parseFloat(e.target.value) || 0 })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Stock Units</label>
+                  <input
+                    type="number"
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                    value={editingProduct.stock || 0}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, stock: parseInt(e.target.value, 10) || 0 })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100 font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded bg-slate-900 text-white font-bold hover:bg-slate-800"
+                >
+                  Update Product in DB1
                 </button>
               </div>
             </form>
