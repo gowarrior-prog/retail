@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 root_env = Path(__file__).resolve().parents[1] / ".env"
 if not root_env.exists():
     root_env = Path(__file__).resolve().parents[2] / ".env"
-load_dotenv(dotenv_path=root_env)
+load_dotenv(dotenv_path=str(root_env), override=True)
 
 def get_async_url(key: str) -> str:
     url = os.getenv(key) or os.getenv("DATABASE_URL") or ""
