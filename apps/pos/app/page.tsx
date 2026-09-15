@@ -1,7 +1,6 @@
 'use client';
 import { useEffect } from 'react';
 import { useProductStore } from '@/stores/useProductStore';
-import Header from '@/components/layout/Header';
 import LeftRegisterPanel from '@/components/checkout/LeftRegisterPanel';
 import CategoryNavSlider from '@/components/checkout/CategoryNavSlider';
 import ProductCatalogGrid from '@/components/checkout/ProductCatalogGrid';
@@ -14,10 +13,7 @@ export default function CheckoutPOSPage() {
   }, [loadProducts]);
 
   return (
-    <div className="h-screen max-h-screen w-full overflow-hidden flex flex-col bg-slate-100 select-none">
-      {/* Top Header */}
-      <Header />
-
+    <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden flex flex-col bg-slate-100 select-none">
       {/* Main Register Workspace */}
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         {/* Left Cart & Touch Keypad Panel */}

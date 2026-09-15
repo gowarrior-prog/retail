@@ -12,6 +12,7 @@ const navItems = [
   { href: '/purchases', label: 'Buy', icon: ShoppingBag, shortcut: 'F5' },
   { href: '/employees', label: 'Staff', icon: Users, shortcut: 'F6' },
   { href: '/analytics', label: 'Sales', icon: BarChart3, shortcut: 'F9' },
+  { href: '/settings', label: 'Setup', icon: Settings, shortcut: 'F10' },
 ];
 
 export default function Sidebar() {
