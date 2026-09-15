@@ -16,36 +16,31 @@ enum EmployeeRole {
 }
 
 model Employee {
-  id          String         @id @default(uuid())
-  name        String
-  phone       String         @unique
-  cnic        String?        @unique
-  role        EmployeeRole   @default(SALES_EXECUTIVE)
-  baseSalary  Float          @map("base_salary")
-  storeId     String?        @map("store_id")
-  isDeleted   Boolean        @default(false) @map("is_deleted")
+  id               String         @id @default(uuid())
+  name             String
+  phone            String         @unique
+  cnic             String?        @unique
+  role             EmployeeRole   @default(SALES_EXECUTIVE)
+  baseSalary       Float          @map("base_salary")
+  isDeleted        Boolean        @default(false) @map("is_deleted")
+  
+  // Attendance Tracking (Embedded)
+  attendanceStatus String         @default("PRESENT") @map("attendance_status") // PRESENT, ABSENT, LATE, HALF_DAY
+  attendanceNotes  String?        @map("attendance_notes")
+  lastAttendanceDate DateTime?    @map("last_attendance_date")
 
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime       @default(now()) @updatedAt @map("updated_at")
+  // Leave Tracking (Embedded)
+  leaveStatus      String         @default("NONE") @map("leave_status") // NONE, PENDING, APPROVED, REJECTED
+  leaveReason      String?        @map("leave_reason")
+  leaveStartDate   DateTime?      @map("leave_start_date")
+  leaveEndDate     DateTime?      @map("leave_end_date")
 
-  attendances Attendance[]
-  salaries    SalaryPayout[]
-  leaves      EmployeeLeave[]
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  salaries         SalaryPayout[]
 
   @@map("employees")
-}
-
-model Attendance {
-  id         String   @id @default(uuid())
-  employeeId String   @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  date       DateTime @default(now())
-  status     String   // PRESENT, ABSENT, LATE, HALF_DAY
-  notes      String?
-
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  @@map("employee_attendance")
 }
 
 model SalaryPayout {
@@ -59,63 +54,4 @@ model SalaryPayout {
   paidAt     DateTime @default(now()) @map("paid_at")
 
   @@map("salary_payouts")
-}
-
-model EmployeeLeave {
-  id         String   @id @default(uuid())
-  employeeId String   @map("employee_id")
-  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  startDate  DateTime @map("start_date")
-  endDate    DateTime @map("end_date")
-  reason     String?
-  status     String   @default("PENDING") // PENDING, APPROVED, REJECTED
-
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  @@map("employee_leaves")
-}
-
-// Shop Purchases (Buy from Suppliers / Vendors)
-model ShopPurchase {
-  id           String   @id @default(uuid())
-  supplierName String   @map("supplier_name")
-  itemName     String   @map("item_name")
-  quantity     Int
-  totalCost    Float    @map("total_cost")
-  paidAmount   Float    @map("paid_amount")
-  remaining    Float    @default(0)
-  notes        String?
-  purchaseDate DateTime @default(now()) @map("purchase_date")
-
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@map("shop_purchases")
-}
-
-// Khata (Customer Ledger & Credit/Debit)
-model CustomerKhata {
-  id           String             @id @default(uuid())
-  customerName String             @map("customer_name")
-  phone        String             @unique
-  totalBalance Float              @default(0) @map("total_balance") // Positive = customer owes shop, Negative = shop owes customer
-  
-  transactions KhataTransaction[]
-
-  createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime           @default(now()) @updatedAt @map("updated_at")
-
-  @@map("customer_khata")
-}
-
-model KhataTransaction {
-  id          String        @id @default(uuid())
-  khataId     String        @map("khata_id")
-  khata       CustomerKhata @relation(fields: [khataId], references: [id], onDelete: Cascade)
-  type        String        // DEBIT (Udhari/Gave product), CREDIT (Vasooli/Received Payment)
-  amount      Float
-  description String?
-
-  createdAt   DateTime      @default(now()) @map("created_at")
-
-  @@map("khata_transactions")
 }

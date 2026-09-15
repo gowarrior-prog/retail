@@ -13,31 +13,6 @@ export interface CartItem {
   discount: number; // percentage
 }
 
-export const INITIAL_DEMO_ITEMS: CartItem[] = [
-  {
-    id: 'prod-001',
-    name: 'Banarasi Silk Embroidered Suit (3-Piece)',
-    price: 4500,
-    cost_price: 2800,
-    quantity: 1,
-    image_url: null,
-    sku: 'SILK-001',
-    category: 'Silk Collection',
-    discount: 5,
-  },
-  {
-    id: 'prod-002',
-    name: 'Pure Crinkle Chiffon Dupatta (Emerald)',
-    price: 1250,
-    cost_price: 750,
-    quantity: 2,
-    image_url: null,
-    sku: 'ACC-004',
-    category: 'Accessories',
-    discount: 0,
-  },
-];
-
 interface CartState {
   items: CartItem[];
   taxRate: number;
@@ -63,6 +38,7 @@ interface CartState {
   addItem: (product: any) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, qty: number) => void;
+  updatePrice: (id: string, price: number) => void;
   setItemDiscount: (id: string, discount: number) => void;
   setGlobalDiscount: (discount: number) => void;
   setTaxRate: (rate: number) => void;
@@ -77,16 +53,16 @@ interface CartState {
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
-  items: INITIAL_DEMO_ITEMS,
+  items: [],
   taxRate: 15,
   globalDiscount: 0,
   tenderedAmount: '',
   giftReceipt: false,
   emailCopy: false,
-  customerName: 'Marcus Sterling',
-  customerPhone: '+92 300 1234567',
+  customerName: '',
+  customerPhone: '',
   paymentMode: 'CASH',
-  cashierName: 'Cashier',
+  cashierName: 'Admin',
   storeId: 'store-1',
 
   subtotal: () => {
@@ -127,9 +103,9 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   itemCount: () => get().items.reduce((sum, item) => sum + item.quantity, 0),
 
-  setItems: (items) => set({ items }),
+  setItems: (items: CartItem[]) => set({ items }),
 
-  addItem: (product) => set((state) => {
+  addItem: (product: any) => set((state: CartState) => {
     const existing = state.items.find(i => i.id === product.id);
     if (existing) {
       return {
@@ -153,28 +129,32 @@ export const useCartStore = create<CartState>((set, get) => ({
     };
   }),
 
-  removeItem: (id) => set((state) => ({
+  removeItem: (id: string) => set((state: CartState) => ({
     items: state.items.filter(i => i.id !== id),
   })),
 
-  updateQuantity: (id, qty) => set((state) => ({
+  updateQuantity: (id: string, qty: number) => set((state: CartState) => ({
     items: qty <= 0
       ? state.items.filter(i => i.id !== id)
       : state.items.map(i => i.id === id ? { ...i, quantity: qty } : i),
   })),
 
-  setItemDiscount: (id, discount) => set((state) => ({
+  updatePrice: (id: string, price: number) => set((state: CartState) => ({
+    items: state.items.map(i => i.id === id ? { ...i, price: Math.max(0, price) } : i),
+  })),
+
+  setItemDiscount: (id: string, discount: number) => set((state: CartState) => ({
     items: state.items.map(i => i.id === id ? { ...i, discount: Math.max(0, Math.min(100, discount)) } : i),
   })),
 
-  setGlobalDiscount: (discount) => set({ globalDiscount: Math.max(0, Math.min(100, discount)) }),
-  setTaxRate: (rate) => set({ taxRate: Math.max(0, rate) }),
-  setTenderedAmount: (amount) => set({ tenderedAmount: amount }),
-  setGiftReceipt: (v) => set({ giftReceipt: v }),
-  setEmailCopy: (v) => set({ emailCopy: v }),
-  setCustomerName: (name) => set({ customerName: name }),
-  setCustomerPhone: (phone) => set({ customerPhone: phone }),
-  setPaymentMode: (mode) => set({ paymentMode: mode }),
-  setCashierName: (name) => set({ cashierName: name }),
+  setGlobalDiscount: (discount: number) => set({ globalDiscount: Math.max(0, Math.min(100, discount)) }),
+  setTaxRate: (rate: number) => set({ taxRate: Math.max(0, rate) }),
+  setTenderedAmount: (amount: string) => set({ tenderedAmount: amount }),
+  setGiftReceipt: (v: boolean) => set({ giftReceipt: v }),
+  setEmailCopy: (v: boolean) => set({ emailCopy: v }),
+  setCustomerName: (name: string) => set({ customerName: name }),
+  setCustomerPhone: (phone: string) => set({ customerPhone: phone }),
+  setPaymentMode: (mode: string) => set({ paymentMode: mode }),
+  setCashierName: (name: string) => set({ cashierName: name }),
   clearCart: () => set({ items: [], globalDiscount: 0, tenderedAmount: '', customerName: '', customerPhone: '' }),
 }));

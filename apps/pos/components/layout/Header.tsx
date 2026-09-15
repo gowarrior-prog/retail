@@ -1,15 +1,19 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { Search, PauseCircle, Wifi, WifiOff, History, RefreshCw, X, Receipt } from 'lucide-react';
+import { useState } from 'react';
+import { Search, History, RefreshCw, X, Receipt, Layers, Lock, UserCircle2 } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProductStore } from '@/stores/useProductStore';
+import { useCartStore } from '@/stores/useCartStore';
 import { fetchBillingHistory, syncOdoo } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
+import CashierSelectModal from '@/components/checkout/CashierSelectModal';
 
 export default function Header() {
-  const { isOnline, heldOrdersCount, isSyncing, setSyncing } = useUIStore();
+  const { heldOrdersCount, isSyncing, setSyncing } = useUIStore();
   const { setSearchQuery, searchQuery, loadProducts } = useProductStore();
+  const { cashierName, setCashierName } = useCartStore();
   const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showCashierModal, setShowCashierModal] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
@@ -38,113 +42,159 @@ export default function Header() {
     }
   };
 
+  const currentCashierName = cashierName || 'Admin';
+
+  const initials = currentCashierName
+    .split(' ')
+    .map((n) => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
+
   return (
     <>
-      <header className="fixed top-0 left-0 right-0 z-50 h-16 bg-white border-b border-slate-200 px-4 flex items-center justify-between gap-4">
-        {/* Left: Brand Identity */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center font-bold text-sm font-mono tracking-wider">
-              BC
+      <header className="h-14 bg-white text-slate-800 flex items-center justify-between px-3 sm:px-4 z-20 shrink-0 border-b border-slate-200 shadow-2xs">
+        {/* Left: Logo & Brand */}
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+            {/* Circular Logo */}
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="Bilal Cloth House Logo"
+                className="w-full h-full object-contain drop-shadow-sm"
+              />
             </div>
-            <div className="flex flex-col">
-              <span className="font-bold text-slate-900 text-base tracking-tight leading-tight">
-                Bilal Cloth & Silk
+            <div className="flex flex-col leading-tight min-w-0">
+              <span className="font-extrabold text-xs sm:text-sm tracking-tight text-slate-900 flex items-center gap-1.5 font-sans">
+                <span className="truncate">BILAL CLOTH</span>
+                <span className="text-[9px] sm:text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 sm:px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">
+                  POS v17
+                </span>
               </span>
-              <span className="text-[11px] text-slate-500 font-medium">Main Bazar Railway Road, Narowal</span>
+              <span className="text-[8px] sm:text-[9.5px] text-slate-400 font-semibold tracking-wider uppercase truncate">
+                HOUSE & SILK CENTER • NAROWAL
+              </span>
             </div>
           </div>
-          <div className="h-5 w-px bg-slate-200 mx-1 hidden lg:block" />
-          <div className="hidden lg:flex items-center gap-2 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 text-xs font-mono text-slate-600">
-            <span>REG-01</span>
+
+          <div className="hidden md:flex items-center gap-2 border-l border-slate-200 pl-3 text-xs shrink-0">
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              Terminal #04
+            </span>
+            <button
+              onClick={handleOpenHistory}
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition text-[11px] font-semibold cursor-pointer active:scale-95"
+            >
+              <Layers className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="font-bold text-emerald-700">1</span> Active Order
+            </button>
           </div>
         </div>
 
-        {/* Center: Search Bar */}
-        <div className="flex-1 max-w-lg mx-2 hidden md:block">
-          <div className="relative flex items-center w-full">
-            <Search className="absolute left-3 text-slate-400 w-4 h-4 pointer-events-none" />
+        {/* Central Search Bar */}
+        <div className="flex-1 max-w-md mx-3 hidden sm:block">
+          <div className="relative w-full">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
+            </div>
             <input
-              className="w-full h-9 pl-9 pr-12 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:bg-white focus:border-slate-400 transition-all"
-              placeholder="Search fabric items, SKU, barcode..."
+              id="product-search-input"
+              className="w-full pl-9 pr-14 py-1.5 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition shadow-inner font-medium"
+              placeholder="Search items by barcode, SKU or title..."
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
-            <kbd className="absolute right-2.5 bg-white border border-slate-200 text-slate-400 font-mono text-[10px] px-1.5 py-0.5 rounded">
-              F1
-            </kbd>
+            {searchQuery && (
+              <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-200"
+                  title="Clear search"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Right: Actions, Order History & Status */}
-        <div className="flex items-center gap-2">
-          {/* Order History Button in Top Nav */}
+        {/* Right: Cashier & Actions */}
+        <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          {/* Cashier Pill - Clickable to open modal */}
           <button
-            onClick={handleOpenHistory}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold transition-colors"
-            title="View Recent Invoices (DB3)"
+            onClick={() => setShowCashierModal(true)}
+            className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 px-2 sm:px-2.5 py-1 rounded-lg border border-slate-200 transition cursor-pointer active:scale-95"
           >
-            <History className="w-4 h-4 text-slate-600" />
-            <span className="hidden sm:inline">Order History</span>
+            <div className="relative">
+              <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-[11px] font-bold flex items-center justify-center shadow-inner">
+                {initials}
+              </span>
+              <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 bg-emerald-500 border border-white rounded-full"></span>
+            </div>
+            <div className="flex flex-col text-left hidden sm:block leading-none">
+              <span className="text-xs font-bold text-slate-900">{currentCashierName}</span>
+              <span className="text-[9.5px] text-emerald-600 font-semibold">Cashier</span>
+            </div>
           </button>
 
-          {/* Odoo ERP Sync Button */}
-          <button
-            onClick={handleSyncOdoo}
-            disabled={isSyncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold transition-colors disabled:opacity-50"
-            title="Sync products from Odoo ERP"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-emerald-600' : 'text-slate-600'}`} />
-            <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync Odoo'}</span>
-          </button>
-
-          {/* Held Orders Badge */}
-          {heldOrdersCount > 0 && (
-            <div className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700">
-              <PauseCircle className="w-3.5 h-3.5 text-slate-600" />
-              <span>{heldOrdersCount} Held</span>
-            </div>
-          )}
-
-          {/* Online/Offline Status */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-xs font-medium text-slate-600">
-            {isOnline ? (
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-            ) : (
-              <WifiOff className="w-3.5 h-3.5 text-red-500" />
-            )}
-            <span className="hidden lg:inline text-[11px]">{isOnline ? 'Online' : 'Offline'}</span>
-          </div>
-
-          <div className="h-5 w-px bg-slate-200 mx-1" />
-
-          {/* Cashier Badge */}
-          <div className="flex items-center gap-2">
-            <div className="text-right hidden sm:block">
-              <div className="text-xs font-bold text-slate-800 leading-none">Tariq (Cashier)</div>
-              <div className="text-[10px] text-slate-500 font-mono mt-0.5">Shift Lead</div>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-700 font-bold text-xs font-mono">
-              T
-            </div>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={handleSyncOdoo}
+              disabled={isSyncing}
+              className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+              title="Sync Online"
+            >
+              <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            </button>
+            <button
+              onClick={handleOpenHistory}
+              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer"
+              title="Order History"
+            >
+              <History className="w-4 h-4" />
+            </button>
+            <button
+              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition cursor-pointer hidden sm:flex"
+              title="Lock Terminal"
+            >
+              <Lock className="w-4 h-4" />
+            </button>
           </div>
         </div>
       </header>
 
+      {/* Cashier Select Modal */}
+      {showCashierModal && (
+        <CashierSelectModal
+          currentCashierId={null}
+          onSelect={(cashier) => {
+            setCashierName(cashier.name);
+            setShowCashierModal(false);
+          }}
+          onClose={() => setShowCashierModal(false)}
+        />
+      )}
+
       {/* Order History Modal */}
       {showHistoryModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col">
-            <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-5 h-5 text-slate-700" />
-                <h3 className="font-bold text-slate-900 text-base">Order History (DB3 Invoices)</h3>
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                  <Receipt className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Recent Invoices & Order History</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Completed billing transactions from DB3</p>
+                </div>
               </div>
               <button
                 onClick={() => setShowHistoryModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -152,11 +202,11 @@ export default function Header() {
 
             <div className="p-5 overflow-y-auto flex-1">
               {isLoadingHistory ? (
-                <div className="py-12 text-center text-slate-500 text-sm">Loading billing records...</div>
+                <div className="py-12 text-center text-slate-500 text-sm font-medium">Loading sales history...</div>
               ) : historyRecords.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 text-sm">No billing history records found in DB3.</div>
+                <div className="py-12 text-center text-slate-400 text-sm font-medium">No sales transactions recorded yet.</div>
               ) : (
-                <div className="border border-slate-200 rounded-lg overflow-hidden">
+                <div className="border border-slate-200 rounded-xl overflow-hidden shadow-2xs">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase font-mono">
                       <tr>
@@ -169,11 +219,11 @@ export default function Header() {
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
                       {historyRecords.map((rec: any) => (
-                        <tr key={rec.id} className="hover:bg-slate-50">
+                        <tr key={rec.id} className="hover:bg-slate-50 transition-colors">
                           <td className="p-3 font-bold text-slate-900">{rec.invoice_number}</td>
-                          <td className="p-3">{rec.customer_phone || 'Walk-in Client'}</td>
+                          <td className="p-3 font-sans font-medium">{rec.customer_phone || 'Walk-in Client'}</td>
                           <td className="p-3">
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold text-[10px]">
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200">
                               {rec.payment_mode}
                             </span>
                           </td>
@@ -181,7 +231,7 @@ export default function Header() {
                             {formatCurrency(rec.total_amount || 0)}
                           </td>
                           <td className="p-3 text-right text-slate-500 text-[11px]">
-                            {rec.created_at ? new Date(rec.created_at).toLocaleTimeString() : 'Today'}
+                            {rec.created_at ? new Date(rec.created_at).toLocaleString() : 'Recent'}
                           </td>
                         </tr>
                       ))}

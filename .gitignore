@@ -42,3 +42,10 @@ venv/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Rust / Tauri
+target/
+**/src-tauri/target/
+*.db
+apps/api/data/*.db
+
