@@ -12,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" data-theme="light" className="min-h-screen bg-slate-100">
       <body className="min-h-screen w-full font-sans text-slate-800 antialiased bg-slate-100 overflow-y-auto">
         <SidebarWrapper />
-        <div className="min-h-screen xl:pl-16 pt-14 overflow-y-auto">
+        <div className="min-h-screen xl:pl-16 pt-18 overflow-y-auto p-4 lg:p-5">
           {children}
         </div>
       </body>

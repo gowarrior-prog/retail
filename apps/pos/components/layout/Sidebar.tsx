@@ -31,10 +31,10 @@ export default function Sidebar() {
       
       {/* Sidebar */}
       <aside className={cn(
-        "fixed left-0 top-14 bottom-0 w-16 bg-white border-r border-slate-200 z-50 flex flex-col items-center justify-between py-3 shadow-2xs transition-transform duration-300 ease-in-out",
+        "fixed left-0 top-14 bottom-0 w-16 bg-white border-r border-slate-200 z-50 flex flex-col items-center justify-between py-2 shadow-2xs transition-transform duration-300 ease-in-out",
         sidebarOpen ? "translate-x-0" : "-translate-x-full xl:translate-x-0"
       )}>
-        <nav className="flex flex-col items-center gap-2 w-full px-2">
+        <nav className="flex flex-col items-center gap-1.5 w-full px-1.5 overflow-y-auto no-scrollbar">
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
             const Icon = item.icon;
@@ -44,17 +44,17 @@ export default function Sidebar() {
                 href={item.href}
                 onClick={() => setSidebarOpen(false)}
                 className={cn(
-                  'w-12 h-12 rounded-xl flex flex-col items-center justify-center transition-all relative group cursor-pointer active:scale-95',
+                  'w-11 h-11 rounded-xl flex flex-col items-center justify-center transition-all relative group cursor-pointer active:scale-95 shrink-0',
                   isActive
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200'
                     : 'text-slate-500 hover:text-emerald-700 hover:bg-emerald-50'
                 )}
                 title={`${item.label} (${item.shortcut})`}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-[9.5px] font-bold mt-0.5 tracking-tight">{item.label}</span>
+                <Icon className="w-4.5 h-4.5" />
+                <span className="text-[9px] font-bold mt-0.5 tracking-tight">{item.label}</span>
                 {item.label === 'POS' && heldOrdersCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4.5 h-4.5 bg-amber-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-xs">
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-amber-500 text-white text-[9.5px] font-bold rounded-full flex items-center justify-center border-2 border-white shadow-xs">
                     {heldOrdersCount}
                   </span>
                 )}
