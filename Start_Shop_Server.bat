@@ -2,7 +2,7 @@
 title Bilal Cloth POS - Main Shop Server (PC 1)
 color 0A
 echo =========================================================
-echo       BILAL CLOTH & SILK CENTER - MAIN SHOP SERVER
+echo       BILAL CLOTH ^& SILK CENTER - MAIN SHOP SERVER
 echo =========================================================
 echo Host: 0.0.0.0 (Listening on All Shop Network Cards)
 echo Port: 8000
