@@ -20,6 +20,24 @@ async def backup_all_data_to_hard_drive() -> dict:
     data_dir = get_data_dir()
     stats = {}
 
+    def safe_write_backup(filename: str, new_list: list, entity_key: str):
+        filepath = os.path.join(data_dir, filename)
+        if len(new_list) > 0:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(new_list, f, indent=2, ensure_ascii=False)
+            stats[entity_key] = len(new_list)
+        elif os.path.exists(filepath):
+            try:
+                with open(filepath, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+                stats[entity_key] = len(existing) if isinstance(existing, list) else 0
+            except Exception:
+                stats[entity_key] = 0
+        else:
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump([], f, indent=2, ensure_ascii=False)
+            stats[entity_key] = 0
+
     # 1. Products Catalog Backup (DB1)
     try:
         async with SessionDb1() as db1:
@@ -41,10 +59,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "created_at": str(p.created_at) if p.created_at else None,
                 "updated_at": str(p.updated_at) if p.updated_at else None
             } for p in products]
-            
-            with open(os.path.join(data_dir, "local_catalog_backup.json"), "w", encoding="utf-8") as f:
-                json.dump(p_list, f, indent=2, ensure_ascii=False)
-            stats["products"] = len(p_list)
+            safe_write_backup("local_catalog_backup.json", p_list, "products")
     except Exception as e:
         stats["products_error"] = str(e)
 
@@ -67,10 +82,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "leave_reason": e.leave_reason,
                 "created_at": str(e.created_at) if e.created_at else None,
             } for e in employees]
-            
-            with open(os.path.join(data_dir, "local_employees_backup.json"), "w", encoding="utf-8") as f:
-                json.dump(e_list, f, indent=2, ensure_ascii=False)
-            stats["employees"] = len(e_list)
+            safe_write_backup("local_employees_backup.json", e_list, "employees")
     except Exception as e:
         stats["employees_error"] = str(e)
 
@@ -92,10 +104,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "billing_date": str(b.billing_date) if b.billing_date else None,
                 "created_at": str(b.created_at) if b.created_at else None,
             } for b in invoices]
-            
-            with open(os.path.join(data_dir, "local_billing_backup.json"), "w", encoding="utf-8") as f:
-                json.dump(b_list, f, indent=2, ensure_ascii=False)
-            stats["billing_history"] = len(b_list)
+            safe_write_backup("local_billing_backup.json", b_list, "billing_history")
     except Exception as e:
         stats["billing_error"] = str(e)
 
@@ -111,10 +120,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "total_balance": k.total_balance,
                 "created_at": str(k.created_at) if k.created_at else None,
             } for k in khatas]
-            
-            with open(os.path.join(data_dir, "local_khata_backup.json"), "w", encoding="utf-8") as f:
-                json.dump(k_list, f, indent=2, ensure_ascii=False)
-            stats["customer_khata"] = len(k_list)
+            safe_write_backup("local_khata_backup.json", k_list, "customer_khata")
     except Exception as e:
         stats["khata_error"] = str(e)
 
@@ -135,10 +141,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "purchase_date": str(p.purchase_date) if p.purchase_date else None,
                 "created_at": str(p.created_at) if p.created_at else None,
             } for p in purchases]
-            
-            with open(os.path.join(data_dir, "local_purchases_backup.json"), "w", encoding="utf-8") as f:
-                json.dump(pur_list, f, indent=2, ensure_ascii=False)
-            stats["shop_purchases"] = len(pur_list)
+            safe_write_backup("local_purchases_backup.json", pur_list, "shop_purchases")
     except Exception as e:
         stats["purchases_error"] = str(e)
 
