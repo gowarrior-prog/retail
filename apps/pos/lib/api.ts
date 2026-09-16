@@ -72,10 +72,7 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     return await res.json();
   } catch (err: any) {
     console.warn(`[API] Network notice for ${path}:`, err.message || err);
-    const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError' || err.message?.includes('fetch failed');
-    if (method === 'GET' && (path === '/products' || path === '/employees' || path === '/billing-history' || path === '/khata')) {
-      return [] as unknown as T;
-    }
+    const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError' || err.message?.includes('fetch failed') || err.message?.includes('network');
     if (isNetworkError) {
       throw new Error(`Offline Mode: Server (${apiBase}) unreachable.`);
     }
