@@ -101,6 +101,9 @@ importers:
       '@tauri-apps/api':
         specifier: ^2.2.0
         version: 2.11.1
+      bwip-js:
+        specifier: ^4.11.4
+        version: 4.11.4
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -141,6 +144,9 @@ importers:
       '@tauri-apps/cli':
         specifier: ^2.2.0
         version: 2.11.4
+      '@types/bwip-js':
+        specifier: ^4.0.0
+        version: 4.0.0
       '@types/node':
         specifier: 26.4.1
         version: 26.4.1
@@ -1563,6 +1569,10 @@ packages:
     cpu: [arm64]
     os: [win32]
 
+  '@types/bwip-js@4.0.0':
+    resolution: {integrity: sha512-R69o++0By/0pk5OwC7J9JS0axmfWRiRFpCU3dX5BQqmmPCwY0cR6tswQvFusvxUbtUeySRaQTfwYmB4symJb3A==}
+    deprecated: This is a stub types definition. bwip-js provides its own type definitions, so you do not need this installed.
+
   '@types/d3-array@3.0.3':
     resolution: {integrity: sha512-Reoy+pKnvsksN0lQUlcH6dOGjRZ/3WRwXR//m+/8lt1BXeI4xyaUZoqULNjyXXRuh0Mj4LNpkCvhUpQlY3X5xQ==}
 
@@ -1833,6 +1843,10 @@ packages:
   browserslist@4.28.8:
     resolution: {integrity: sha512-V2NpofLblG64mfOtSgDhOJESZEGogzDMBv/q+W6oc4LXWP/q75eOXoOaaOu1EOadB9U4Bwx/e0yzbvwKH8zalA==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
+
+  bwip-js@4.11.4:
+    resolution: {integrity: sha512-FOXnOQkinxog8FwxdnPB+8k2wRqwPnqXwxX37KcXOtMNW+9CinOkGv9MtIoRC4HX/UyogT0/9lIp6FDm2DcquQ==}
+    hasBin: true
 
   c12@3.3.4:
     resolution: {integrity: sha512-cM0ApFQSBXuourJejzwv/AuPRvAxordTyParRVcHjjtXirtkzM0uK2L9TTn9s0cXZbG7E55jCivRQzoxYmRAlA==}
@@ -4082,6 +4096,10 @@ snapshots:
   '@turbo/windows-arm64@2.10.12':
     optional: true
 
+  '@types/bwip-js@4.0.0':
+    dependencies:
+      bwip-js: 4.11.4
+
   '@types/d3-array@3.0.3': {}
 
   '@types/d3-color@3.1.0': {}
@@ -4328,6 +4346,8 @@ snapshots:
       electron-to-chromium: 1.5.412
       node-releases: 2.0.53
       update-browserslist-db: 1.3.1(browserslist@4.28.8)
+
+  bwip-js@4.11.4: {}
 
   c12@3.3.4(magicast@0.5.4):
     dependencies:

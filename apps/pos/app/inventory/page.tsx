@@ -8,13 +8,30 @@ import {
   RefreshCw,
   X,
   Edit2,
-  Trash2
+  Trash2,
+  Barcode,
+  Printer
 } from 'lucide-react';
 import { useProductStore } from '@/stores/useProductStore';
 import { syncOdoo, createProduct, updateProduct, deleteProduct, type Product } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
+import BarcodePrinterModal from '@/components/inventory/BarcodePrinterModal';
 
 const FABRIC_CATEGORIES = ['All', 'Lawn', 'Cambric', 'Cotton', 'Khaddar', 'Fancy', 'Shawl'] as const;
+
+const generateAutoBarcode = (category: string) => {
+  const prefixMap: Record<string, string> = {
+    Lawn: 'GLA',
+    Cambric: 'CMB',
+    Cotton: 'CTN',
+    Khaddar: 'KHD',
+    Fancy: 'FNC',
+    Shawl: 'SHL',
+  };
+  const prefix = prefixMap[category] || 'BC';
+  const num = Math.floor(10 + Math.random() * 89);
+  return `${prefix}-${num}`;
+};
 
 export default function InventoryPage() {
   const { products, isLoading, loadProducts } = useProductStore();
@@ -25,6 +42,7 @@ export default function InventoryPage() {
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [barcodeProduct, setBarcodeProduct] = useState<Product | null>(null);
 
   const [newProduct, setNewProduct] = useState({
     name: '',
@@ -40,6 +58,20 @@ export default function InventoryPage() {
   useEffect(() => {
     loadProducts(false);
   }, []);
+
+  const handleOpenAddModal = () => {
+    const autoCode = generateAutoBarcode('Lawn');
+    setNewProduct({
+      name: '',
+      category: 'Lawn',
+      price: '',
+      cost_price: '',
+      stock: '',
+      barcode: autoCode,
+      image: '',
+    });
+    setIsAddModalOpen(true);
+  };
 
   const handleSyncOdoo = async () => {
     setIsSyncing(true);
@@ -91,6 +123,8 @@ export default function InventoryPage() {
     const stockNum = parseInt(newProduct.stock, 10) || 0;
     const margin = priceNum > 0 ? Number((((priceNum - costNum) / priceNum) * 100).toFixed(1)) : 0;
 
+    const finalBarcode = newProduct.barcode.trim() || generateAutoBarcode(newProduct.category);
+
     const productPayload: Partial<Product> = {
       name: newProduct.name || 'Fabric Item',
       price: priceNum,
@@ -98,7 +132,8 @@ export default function InventoryPage() {
       profit_margin: margin,
       category: newProduct.category || 'Lawn',
       stock: stockNum,
-      barcode: newProduct.barcode || `${(newProduct.category || 'GEN').slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
+      barcode: finalBarcode,
+      sku: finalBarcode,
     };
 
     try {
@@ -166,7 +201,7 @@ export default function InventoryPage() {
 
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={handleOpenAddModal}
             className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
           >
             <Plus className="w-4 h-4" />
@@ -303,17 +338,25 @@ export default function InventoryPage() {
                     <td className="p-3 text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         <button
+                          onClick={() => setBarcodeProduct(p)}
+                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded border border-indigo-200 cursor-pointer"
+                          title="Print Barcode Label Sticker"
+                        >
+                          <Barcode className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
                           onClick={() => setEditingProduct(p)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded border border-slate-200"
-                          title="Edit Product in DB1"
+                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded border border-slate-200 cursor-pointer"
+                          title="Edit Product"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
 
                         <button
                           onClick={() => handleDeleteProduct(p.id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-red-200"
-                          title="Delete Product from DB1"
+                          className="p-1.5 text-red-600 hover:bg-red-50 rounded border border-red-200 cursor-pointer"
+                          title="Delete Product"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -359,162 +402,166 @@ export default function InventoryPage() {
       </div>
 
       {/* Add Product Modal */}
-{isAddModalOpen && (
-  <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
-    <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-        <h3 className="font-bold text-slate-900 text-sm">Add New Fabric SKU to DB1</h3>
-        <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600">
-          <X className="w-4 h-4" />
-        </button>
-      </div>
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <h3 className="font-bold text-slate-900 text-sm">Add New Fabric SKU</h3>
+              <button onClick={() => setIsAddModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
 
-      <form onSubmit={handleCreateProductSubmit} className="flex flex-col gap-3 mt-3 text-xs">
-        
-        {/* Optional Product Image */}
-        <div>
-          <label className="block text-slate-600 font-semibold mb-1">
-            Product Image <span className="text-slate-400 font-normal">(Optional)</span>
-          </label>
-          <div className="flex items-center gap-3">
-            {newProduct.image ? (
-              <div className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
-                <img
-                  src={newProduct.image}
-                  alt="Preview"
-                  className="w-full h-full object-cover"
+            <form onSubmit={handleCreateProductSubmit} className="flex flex-col gap-3 mt-3 text-xs">
+              {/* Optional Product Image */}
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">
+                  Product Image <span className="text-slate-400 font-normal">(Optional)</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  {newProduct.image ? (
+                    <div className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden bg-slate-50">
+                      <img
+                        src={newProduct.image}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setNewProduct({ ...newProduct, image: '' })}
+                        className="absolute top-0.5 right-0.5 bg-white/90 rounded-full p-0.5 shadow"
+                      >
+                        <X className="w-3 h-3 text-slate-600" />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors">
+                      <span className="text-[10px] text-slate-400 font-medium">Upload</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setNewProduct({ ...newProduct, image: reader.result as string });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
+                  )}
+                  <div className="text-[11px] text-slate-400 leading-tight">
+                    JPG, PNG recommended<br />
+                    Max 2MB
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-600 font-semibold mb-1">Fabric Title</label>
+                <input
+                  required
+                  className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none"
+                  placeholder="e.g. Print Lawn 3Piece"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Category</label>
+                  <select
+                    className="w-full h-8 px-2 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-semibold text-slate-800"
+                    value={newProduct.category}
+                    onChange={(e) => {
+                      const cat = e.target.value;
+                      const autoCode = generateAutoBarcode(cat);
+                      setNewProduct({ ...newProduct, category: cat, barcode: autoCode });
+                    }}
+                  >
+                    {FABRIC_CATEGORIES.filter((c) => c !== 'All').map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Barcode / SKU</label>
+                  <input
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono font-bold text-slate-900"
+                    placeholder="GLA-01"
+                    value={newProduct.barcode}
+                    onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Sale Price</label>
+                  <input
+                    required
+                    type="number"
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                    placeholder="4790"
+                    value={newProduct.price}
+                    onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Cost Price</label>
+                  <input
+                    type="number"
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                    placeholder="3100"
+                    value={newProduct.cost_price}
+                    onChange={(e) => setNewProduct({ ...newProduct, cost_price: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-600 font-semibold mb-1">Initial Stock</label>
+                  <input
+                    type="number"
+                    className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
+                    placeholder="25"
+                    value={newProduct.stock}
+                    onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
-                  onClick={() => setNewProduct({ ...newProduct, image: '' })}
-                  className="absolute top-0.5 right-0.5 bg-white/90 rounded-full p-0.5 shadow"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
                 >
-                  <X className="w-3 h-3 text-slate-600" />
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded bg-slate-900 text-white font-bold hover:bg-slate-800 cursor-pointer"
+                >
+                  Save Product & Generate Barcode
                 </button>
               </div>
-            ) : (
-              <label className="w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 flex flex-col items-center justify-center cursor-pointer hover:border-slate-400 hover:bg-slate-50 transition-colors">
-                <span className="text-[10px] text-slate-400 font-medium">Upload</span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        setNewProduct({ ...newProduct, image: reader.result as string });
-                      };
-                      reader.readAsDataURL(file);
-                    }
-                  }}
-                />
-              </label>
-            )}
-            <div className="text-[11px] text-slate-400 leading-tight">
-              JPG, PNG recommended<br />
-              Max 2MB
-            </div>
+            </form>
           </div>
         </div>
+      )}
 
-        <div>
-          <label className="block text-slate-600 font-semibold mb-1">Fabric Title</label>
-          <input
-            required
-            className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none"
-            placeholder="e.g. Gul Ahmed Printed Lawn 3pc"
-            value={newProduct.name}
-            onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="block text-slate-600 font-semibold mb-1">Category</label>
-            <select
-              className="w-full h-8 px-2 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none"
-              value={newProduct.category}
-              onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-            >
-              {FABRIC_CATEGORIES.filter((c) => c !== 'All').map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-slate-600 font-semibold mb-1">Barcode / SKU</label>
-            <input
-              className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
-              placeholder="LWN-GA-001"
-              value={newProduct.barcode}
-              onChange={(e) => setNewProduct({ ...newProduct, barcode: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <label className="block text-slate-600 font-semibold mb-1">Sale Price</label>
-            <input
-              required
-              type="number"
-              className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
-              placeholder="6850"
-              value={newProduct.price}
-              onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-slate-600 font-semibold mb-1">Cost Price</label>
-            <input
-              type="number"
-              className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
-              placeholder="4350"
-              value={newProduct.cost_price}
-              onChange={(e) => setNewProduct({ ...newProduct, cost_price: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="block text-slate-600 font-semibold mb-1">Initial Stock</label>
-            <input
-              type="number"
-              className="w-full h-8 px-2.5 rounded border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none font-mono"
-              placeholder="25"
-              value={newProduct.stock}
-              onChange={(e) => setNewProduct({ ...newProduct, stock: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
-          <button
-            type="button"
-            onClick={() => setIsAddModalOpen(false)}
-            className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100 font-semibold"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="px-4 py-1.5 rounded bg-slate-900 text-white font-bold hover:bg-slate-800"
-          >
-            Save Product to DB1
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-)}
       {/* Edit Product Modal */}
       {editingProduct && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200">
-              <h3 className="font-bold text-slate-900 text-sm">Edit Product (DB1)</h3>
+              <h3 className="font-bold text-slate-900 text-sm">Edit Product</h3>
               <button onClick={() => setEditingProduct(null)} className="text-slate-400 hover:text-slate-600">
                 <X className="w-4 h-4" />
               </button>
@@ -585,20 +632,28 @@ export default function InventoryPage() {
                 <button
                   type="button"
                   onClick={() => setEditingProduct(null)}
-                  className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100 font-semibold"
+                  className="px-3 py-1.5 rounded text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded bg-slate-900 text-white font-bold hover:bg-slate-800"
+                  className="px-4 py-1.5 rounded bg-slate-900 text-white font-bold hover:bg-slate-800 cursor-pointer"
                 >
-                  Update Product in DB1
+                  Update Product
                 </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {/* Barcode Sticker Printer Modal */}
+      {barcodeProduct && (
+        <BarcodePrinterModal
+          product={barcodeProduct}
+          onClose={() => setBarcodeProduct(null)}
+        />
       )}
     </div>
   );
