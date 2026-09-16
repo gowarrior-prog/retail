@@ -274,7 +274,8 @@ async def sync_odoo_employees() -> dict:
 
             for emp in employees_data:
                 name = str(emp.get("name") or "Staff Member")
-                phone = str(emp.get("work_phone") or emp.get("mobile_phone") or f"0300-{emp.get('id'):06d}")
+                raw_phone = emp.get("mobile_phone") or emp.get("work_phone")
+                phone = str(raw_phone).strip() if raw_phone and str(raw_phone).strip() != "False" else f"EMP-{emp.get('id')}"
                 job = str(emp.get("job_title") or "SALES_EXECUTIVE")
                 salary = float(emp.get("wage") or 35000.0)
                 cnic = str(emp.get("identification_id") or "") or None
@@ -290,7 +291,7 @@ async def sync_odoo_employees() -> dict:
                     new_emp = EmployeeModel(
                         id=str(uuid.uuid4()),
                         name=name,
-                        phone=phone,
+                        phone=phone if not phone.startswith("EMP-") else "",
                         cnic=cnic,
                         role=job,
                         base_salary=salary
@@ -334,10 +335,12 @@ async def sync_odoo_khata() -> dict:
 
             for p in partners:
                 name = str(p.get("name") or "Khata Customer")
-                phone = str(p.get("mobile") or p.get("phone") or f"0301-{p.get('id'):06d}")
+                raw_phone = p.get("mobile") or p.get("phone")
+                phone = str(raw_phone).strip() if raw_phone and str(raw_phone).strip() != "False" else ""
                 balance = float(p.get("credit") or p.get("total_due") or p.get("debit") or 0.0)
 
-                existing = existing_khatas.get(phone)
+                lookup_key = phone if phone else f"CUST-{p.get('id')}"
+                existing = existing_khatas.get(lookup_key)
                 if existing:
                     existing.customer_name = name
                     existing.total_balance = balance
@@ -349,7 +352,7 @@ async def sync_odoo_khata() -> dict:
                         total_balance=balance
                     )
                     db3.add(new_khata)
-                    existing_khatas[phone] = new_khata
+                    existing_khatas[lookup_key] = new_khata
                 synced_count += 1
             await db3.commit()
 

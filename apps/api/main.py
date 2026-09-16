@@ -45,14 +45,8 @@ async def lifespan(app: FastAPI):
     
     # Run initial hard drive backup on startup
     asyncio.create_task(backup_all_data_to_hard_drive())
-
-    # Start automated background Odoo sync
-    auto_sync_task = asyncio.create_task(periodic_odoo_auto_sync())
     
     yield
-
-    # Cancel background task on shutdown
-    auto_sync_task.cancel()
 
 app = FastAPI(
     title="Retail Ecosystem Multi-Database Modular API",
