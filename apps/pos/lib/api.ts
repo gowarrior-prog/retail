@@ -143,14 +143,39 @@ export async function fetchProducts(): Promise<Product[]> {
   const cached = getLocalProductCache();
   try {
     const raw = await apiFetch<any[]>('/products');
-    if (Array.isArray(raw) && raw.length > 0) {
+    if (Array.isArray(raw)) {
       const parsed = z.array(ProductSchema.partial()).parse(raw) as Product[];
-      const mergedMap = new Map<string, Product>();
-      parsed.forEach(p => mergedMap.set(p.id, p));
-      cached.forEach(c => {
-        if (!mergedMap.has(c.id)) mergedMap.set(c.id, c);
-      });
-      const finalProducts = Array.from(mergedMap.values());
+      const serverMap = new Map<string, Product>();
+      parsed.forEach(p => serverMap.set(p.id, p));
+
+      // Upload any local products that were created offline
+      const unsynced = cached.filter(c => c.id && c.id.startsWith('local-'));
+      if (unsynced.length > 0) {
+        for (const prod of unsynced) {
+          try {
+            const res = await apiFetch<any>('/products', {
+              method: 'POST',
+              body: JSON.stringify({
+                name: prod.name,
+                price: prod.price,
+                cost_price: prod.cost_price,
+                profit_margin: prod.profit_margin,
+                category: prod.category,
+                image_url: prod.image_url,
+                stock: prod.stock,
+                barcode: prod.barcode,
+                sku: prod.sku,
+              }),
+            });
+            const serverProd = ProductSchema.parse(res);
+            serverMap.set(serverProd.id, serverProd);
+          } catch (e) {
+            console.warn('[Sync] Could not upload local product during fetch:', e);
+          }
+        }
+      }
+
+      const finalProducts = Array.from(serverMap.values());
       saveLocalProductCache(finalProducts);
       return finalProducts;
     }

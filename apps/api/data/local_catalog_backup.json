@@ -1,18 +1,1 @@
-[
-  {
-    "id": "9cd81cdd-480b-4cd4-808b-a5420aa94433",
-    "name": "wjnduwbe",
-    "description": null,
-    "price": 3515.0,
-    "cost_price": 444.0,
-    "profit_margin": 87.4,
-    "stock": 4444,
-    "sku": null,
-    "barcode": "wjbe3be",
-    "category": "Lawn",
-    "image_url": null,
-    "odoo_id": null,
-    "created_at": "2026-09-16 03:12:17.983845+00:00",
-    "updated_at": "2026-09-16 03:12:17.983845+00:00"
-  }
-]
+[]

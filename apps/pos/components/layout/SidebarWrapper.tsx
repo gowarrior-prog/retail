@@ -9,21 +9,23 @@ export default function SidebarWrapper() {
     // Run initial sync check for offline bills
     syncPendingOfflineData();
 
-    // Auto-sync when internet/network connection comes back online
-    const handleOnline = () => {
-      console.log('[Auto-Sync] Network connection restored! Syncing pending offline bills to cloud...');
+    // Auto-sync when internet/network connection comes back online or app window is focused
+    const handleSync = () => {
+      console.log('[Auto-Sync] Triggering background sync check...');
       syncPendingOfflineData();
     };
 
-    window.addEventListener('online', handleOnline);
+    window.addEventListener('online', handleSync);
+    window.addEventListener('focus', handleSync);
 
-    // Periodic auto-sync worker every 30 seconds
+    // Periodic auto-sync worker every 5 seconds
     const intervalId = setInterval(() => {
       syncPendingOfflineData();
-    }, 30000);
+    }, 5000);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('online', handleSync);
+      window.removeEventListener('focus', handleSync);
       clearInterval(intervalId);
     };
   }, []);
