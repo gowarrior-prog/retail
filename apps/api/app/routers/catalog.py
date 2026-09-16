@@ -28,6 +28,7 @@ async def get_products(db: AsyncSession = Depends(get_db1)):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 from app.services.sqlite_sync_service import save_product_locally
+from app.services.backup_service import backup_all_data_to_hard_drive
 
 @router.post("/products", response_model=ProductResponse)
 async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_db1)):
@@ -37,8 +38,25 @@ async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_
             data["id"] = str(uuid.uuid4())
         if data.get("price") and data.get("cost_price") and not data.get("profit_margin"):
             data["profit_margin"] = round(((data["price"] - data["cost_price"]) / data["price"]) * 100, 2)
-        db_product = ProductModel(**data)
-        db.add(db_product)
+
+        # Upsert: Check if product with this ID or Barcode already exists in PostgreSQL DB
+        existing = None
+        if data.get("id"):
+            res = await db.execute(select(ProductModel).filter(ProductModel.id == data["id"]))
+            existing = res.scalars().first()
+        if not existing and data.get("barcode"):
+            res = await db.execute(select(ProductModel).filter(ProductModel.barcode == data["barcode"]))
+            existing = res.scalars().first()
+
+        if existing:
+            for k, v in data.items():
+                if k != "id" and v is not None:
+                    setattr(existing, k, v)
+            db_product = existing
+        else:
+            db_product = ProductModel(**data)
+            db.add(db_product)
+
         await db.commit()
         await db.refresh(db_product)
 
@@ -57,6 +75,12 @@ async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_
             )
         except Exception as sq_err:
             print(f"Notice: SQLite local product save error ({sq_err}).")
+
+        # Instantly update hard drive backup JSON file
+        try:
+            await backup_all_data_to_hard_drive()
+        except Exception as b_err:
+            print(f"Notice: Hard drive backup error ({b_err}).")
 
         return db_product
     except Exception as e:
@@ -81,6 +105,10 @@ async def update_product(product_id: str, product_update: ProductCreate, db: Asy
 
         await db.commit()
         await db.refresh(db_product)
+        try:
+            await backup_all_data_to_hard_drive()
+        except Exception:
+            pass
         return db_product
     except Exception as e:
         await db.rollback()
@@ -94,6 +122,10 @@ async def delete_product(product_id: str, db: AsyncSession = Depends(get_db1)):
         raise HTTPException(status_code=404, detail="Product not found")
     await db.delete(db_product)
     await db.commit()
+    try:
+        await backup_all_data_to_hard_drive()
+    except Exception:
+        pass
     return {"message": "Product deleted from DB1 successfully"}
 
 @router.post("/upload-image")
