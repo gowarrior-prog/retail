@@ -252,6 +252,37 @@ export async function fetchOdooSettings(): Promise<any> {
 
 export async function syncPendingOfflineData(): Promise<any> {
   try {
+    // 1. Sync local offline products created while server was unreachable
+    const cachedProducts = getLocalProductCache();
+    const unsyncedProducts = cachedProducts.filter(p => p.id && p.id.startsWith('local-'));
+    if (unsyncedProducts.length > 0) {
+      for (const prod of unsyncedProducts) {
+        try {
+          const res = await apiFetch<any>('/products', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: prod.name,
+              price: prod.price,
+              cost_price: prod.cost_price,
+              profit_margin: prod.profit_margin,
+              category: prod.category,
+              image_url: prod.image_url,
+              stock: prod.stock,
+              barcode: prod.barcode,
+              sku: prod.sku,
+            }),
+          });
+          const serverProd = ProductSchema.parse(res);
+          const current = getLocalProductCache();
+          const updated = [serverProd, ...current.filter(p => p.id !== prod.id && p.id !== serverProd.id)];
+          saveLocalProductCache(updated);
+        } catch (e) {
+          console.warn(`[Auto-Sync] Could not sync local product ${prod.name}:`, e);
+        }
+      }
+    }
+
+    // 2. Sync pending offline bills
     return await apiFetch<any>('/pos/sync-pending', { method: 'POST' });
   } catch (err) {
     console.warn('[Auto-Sync] Pending offline sync notice:', err);
