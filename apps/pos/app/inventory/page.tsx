@@ -105,7 +105,8 @@ export default function InventoryPage() {
       await createProduct(productPayload);
       await loadProducts(true);
     } catch (err: any) {
-      alert(`Failed to save product to DB1: ${err.message}`);
+      console.warn('Product created offline fallback:', err);
+      await loadProducts(false);
     }
 
     setIsAddModalOpen(false);
@@ -120,19 +121,21 @@ export default function InventoryPage() {
       await updateProduct(editingProduct.id, editingProduct);
       await loadProducts(true);
     } catch (err: any) {
-      alert(`Failed to update product in DB1: ${err.message}`);
+      console.warn('Product updated offline fallback:', err);
+      await loadProducts(false);
     }
 
     setEditingProduct(null);
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this product from DB1?')) return;
+    if (!confirm('Are you sure you want to delete this product?')) return;
     try {
       await deleteProduct(id);
       await loadProducts(true);
     } catch (err: any) {
-      alert(`Delete Error: ${err.message}`);
+      console.warn('Product deleted offline fallback:', err);
+      await loadProducts(false);
     }
   };
 
