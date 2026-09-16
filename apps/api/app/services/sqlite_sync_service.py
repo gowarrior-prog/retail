@@ -103,6 +103,39 @@ def save_bill_locally(invoice_number: str, customer_phone: str, total_amount: fl
         "saved_locally": True
     }
 
+def save_product_locally(product_id: str, odoo_id: int | None, name: str, price: float, cost_price: float | None, sku: str, barcode: str | None, category: str | None, stock: int | None) -> dict:
+    """
+    Saves or updates a product in local SQLite with cryptographic HMAC checksum to prevent local price tampering.
+    """
+    init_sqlite_db()
+    now_str = datetime.now().isoformat()
+    raw_payload = f"{product_id}:{name}:{price}:{sku}"
+    checksum = calculate_checksum(raw_payload)
+
+    conn = sqlite3.connect(get_sqlite_path())
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        INSERT INTO local_products (id, odoo_id, name, price, cost_price, sku, barcode, category, stock, checksum, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            odoo_id=excluded.odoo_id,
+            name=excluded.name,
+            price=excluded.price,
+            cost_price=excluded.cost_price,
+            sku=excluded.sku,
+            barcode=excluded.barcode,
+            category=excluded.category,
+            stock=excluded.stock,
+            checksum=excluded.checksum,
+            updated_at=excluded.updated_at
+    """, (product_id, odoo_id or 0, name, price, cost_price or 0.0, sku, barcode or "", category or "General", stock or 0, checksum, now_str))
+
+    conn.commit()
+    conn.close()
+
+    return {"id": product_id, "name": name, "price": price, "checksum": checksum, "saved_locally": True}
+
 def verify_product_integrity(product_id: str, name: str, price: float, sku: str, stored_checksum: str) -> bool:
     """
     Validates HMAC checksum of a product to detect unauthorized local price editing.

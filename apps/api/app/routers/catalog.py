@@ -27,6 +27,8 @@ async def get_products(db: AsyncSession = Depends(get_db1)):
                 return json.load(f)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
+from app.services.sqlite_sync_service import save_product_locally
+
 @router.post("/products", response_model=ProductResponse)
 async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_db1)):
     try:
@@ -39,6 +41,23 @@ async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_
         db.add(db_product)
         await db.commit()
         await db.refresh(db_product)
+
+        # Save to local SQLite database with HMAC checksum
+        try:
+            save_product_locally(
+                product_id=db_product.id,
+                odoo_id=db_product.odoo_id,
+                name=db_product.name,
+                price=db_product.price,
+                cost_price=db_product.cost_price,
+                sku=db_product.sku or db_product.id[:8],
+                barcode=db_product.barcode,
+                category=db_product.category,
+                stock=db_product.stock
+            )
+        except Exception as sq_err:
+            print(f"Notice: SQLite local product save error ({sq_err}).")
+
         return db_product
     except Exception as e:
         await db.rollback()
