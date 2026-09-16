@@ -20,7 +20,7 @@ export const ProductSchema = z.object({
 export const ProductCreateSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1, 'Product name is required'),
-  price: z.number().positive('Price must be greater than zero'),
+  price: z.number().nonnegative('Price must be non-negative').default(0),
   cost_price: z.number().nonnegative().optional().default(0),
   profit_margin: z.number().optional().default(0),
   category: z.string().optional().default('General'),

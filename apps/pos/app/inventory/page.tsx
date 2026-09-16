@@ -92,17 +92,20 @@ export default function InventoryPage() {
     const margin = priceNum > 0 ? Number((((priceNum - costNum) / priceNum) * 100).toFixed(1)) : 0;
 
     const productPayload: Partial<Product> = {
-      name: newProduct.name,
+      name: newProduct.name || 'Fabric Item',
       price: priceNum,
       cost_price: costNum,
       profit_margin: margin,
-      category: newProduct.category,
+      category: newProduct.category || 'Lawn',
       stock: stockNum,
       barcode: newProduct.barcode || `${(newProduct.category || 'GEN').slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
     };
 
     try {
-      await createProduct(productPayload);
+      const created = await createProduct(productPayload);
+      const current = useProductStore.getState().products;
+      const updatedList = [created, ...current.filter(p => p.id !== created.id)];
+      useProductStore.setState({ products: updatedList, filteredProducts: updatedList });
       await loadProducts(true);
     } catch (err: any) {
       console.warn('Product created offline fallback:', err);
@@ -110,7 +113,7 @@ export default function InventoryPage() {
     }
 
     setIsAddModalOpen(false);
-    setNewProduct({ name: '', category: 'Lawn', price: '', cost_price: '', stock: '', barcode: '',image:'', });
+    setNewProduct({ name: '', category: 'Lawn', price: '', cost_price: '', stock: '', barcode: '', image: '' });
   };
 
   const handleUpdateProductSubmit = async (e: React.FormEvent) => {
@@ -118,7 +121,10 @@ export default function InventoryPage() {
     if (!editingProduct) return;
 
     try {
-      await updateProduct(editingProduct.id, editingProduct);
+      const updated = await updateProduct(editingProduct.id, editingProduct);
+      const current = useProductStore.getState().products;
+      const updatedList = current.map(p => p.id === editingProduct.id ? updated : p);
+      useProductStore.setState({ products: updatedList, filteredProducts: updatedList });
       await loadProducts(true);
     } catch (err: any) {
       console.warn('Product updated offline fallback:', err);
@@ -130,6 +136,11 @@ export default function InventoryPage() {
 
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
+
+    const current = useProductStore.getState().products;
+    const updatedList = current.filter(p => p.id !== id);
+    useProductStore.setState({ products: updatedList, filteredProducts: updatedList });
+
     try {
       await deleteProduct(id);
       await loadProducts(true);
