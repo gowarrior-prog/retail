@@ -87,19 +87,81 @@ export type Product = z.infer<typeof ProductSchema>;
 export type Employee = z.infer<typeof EmployeeSchema>;
 export type BillingRecord = z.infer<typeof BillingRecordSchema>;
 
+export function getLocalProductCache(): Product[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('pos_local_products_cache');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalProductCache(products: Product[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('pos_local_products_cache', JSON.stringify(products));
+  } catch (err) {
+    console.warn('[API] Failed to save local product cache:', err);
+  }
+}
+
 export async function fetchProducts(): Promise<Product[]> {
-  const raw = await apiFetch<any[]>('/products');
-  if (!Array.isArray(raw)) return [];
-  return z.array(ProductSchema.partial()).parse(raw) as Product[];
+  const cached = getLocalProductCache();
+  try {
+    const raw = await apiFetch<any[]>('/products');
+    if (Array.isArray(raw) && raw.length > 0) {
+      const parsed = z.array(ProductSchema.partial()).parse(raw) as Product[];
+      // Merge cached local products that might not be synced yet
+      const mergedMap = new Map<string, Product>();
+      parsed.forEach(p => mergedMap.set(p.id, p));
+      cached.forEach(c => {
+        if (!mergedMap.has(c.id)) mergedMap.set(c.id, c);
+      });
+      const finalProducts = Array.from(mergedMap.values());
+      saveLocalProductCache(finalProducts);
+      return finalProducts;
+    }
+    return cached;
+  } catch (err) {
+    console.warn('[API] Backend offline during fetchProducts, using local cache:', err);
+    return cached;
+  }
 }
 
 export async function createProduct(data: any): Promise<Product> {
   const validated = ProductCreateSchema.parse(data);
-  const res = await apiFetch<any>('/products', {
-    method: 'POST',
-    body: JSON.stringify(validated),
-  });
-  return ProductSchema.parse(res);
+  const newProduct: Product = {
+    id: validated.id || `local-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    name: validated.name,
+    price: validated.price,
+    cost_price: validated.cost_price ?? null,
+    profit_margin: validated.profit_margin ?? null,
+    category: validated.category ?? 'General',
+    image_url: validated.image_url ?? null,
+    stock: validated.stock ?? 0,
+    barcode: validated.barcode ?? null,
+    sku: validated.sku || `SKU-${Date.now().toString().slice(-6)}`,
+    odoo_id: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  try {
+    const res = await apiFetch<any>('/products', {
+      method: 'POST',
+      body: JSON.stringify(validated),
+    });
+    const serverProduct = ProductSchema.parse(res);
+    const cached = getLocalProductCache();
+    saveLocalProductCache([serverProduct, ...cached.filter(p => p.id !== serverProduct.id)]);
+    return serverProduct;
+  } catch (err) {
+    console.warn('[API] Backend offline during createProduct, saved to local offline cache.', err);
+    const cached = getLocalProductCache();
+    saveLocalProductCache([newProduct, ...cached.filter(p => p.id !== newProduct.id)]);
+    return newProduct;
+  }
 }
 
 export async function updateProduct(id: string, data: any): Promise<Product> {

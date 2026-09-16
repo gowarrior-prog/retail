@@ -33,7 +33,8 @@ export const useProductStore = create<ProductState>((set, get) => ({
       const valid = liveProducts || [];
       set({ products: valid, filteredProducts: valid, isLoading: false });
     } catch (err: any) {
-      set({ products: [], filteredProducts: [], error: err.message, isLoading: false });
+      console.warn('[Store] loadProducts catch error, retaining current products:', err);
+      set({ isLoading: false });
     }
   },
 

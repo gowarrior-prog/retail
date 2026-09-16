@@ -24,6 +24,7 @@ export const ProductCreateSchema = z.object({
   cost_price: z.number().nonnegative().optional().default(0),
   profit_margin: z.number().optional().default(0),
   category: z.string().optional().default('General'),
+  image_url: z.string().nullable().optional(),
   stock: z.number().int().nonnegative().optional().default(0),
   barcode: z.string().optional(),
   sku: z.string().optional(),
