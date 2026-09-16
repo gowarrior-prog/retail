@@ -43,12 +43,6 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
   }, [barcodeValue, labelSize]);
 
   const handlePrint = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert('Please allow popups to print barcode labels.');
-      return;
-    }
-
     const priceText = showPrice ? `RS: ${Math.round(product.price)}` : '';
     const canvasDataUrl = canvasRef.current ? canvasRef.current.toDataURL('image/png') : '';
 
@@ -68,7 +62,7 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
       `;
     }
 
-    printWindow.document.write(`
+    const printHtml = `
       <!DOCTYPE html>
       <html>
         <head>
@@ -162,17 +156,35 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
           <div class="sticker-grid">
             ${stickersHtml}
           </div>
-          <script>
-            window.onload = function() {
-              window.print();
-              setTimeout(function() { window.close(); }, 500);
-            };
-          </script>
         </body>
       </html>
-    `);
+    `;
 
-    printWindow.document.close();
+    // Create or re-use hidden iframe for direct printing (bypasses Tauri popup blockers)
+    let iframe = document.getElementById('barcode-print-iframe') as HTMLIFrameElement;
+    if (!iframe) {
+      iframe = document.createElement('iframe');
+      iframe.id = 'barcode-print-iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+    }
+
+    const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (iframeDoc) {
+      iframeDoc.open();
+      iframeDoc.write(printHtml);
+      iframeDoc.close();
+
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      }, 300);
+    }
   };
 
   const handleCopyBarcode = () => {
