@@ -249,3 +249,12 @@ export async function fetchOdooSettings(): Promise<any> {
   const raw = await apiFetch<any>('/odoo-settings');
   return OdooSettingsSchema.partial().parse(raw);
 }
+
+export async function syncPendingOfflineData(): Promise<any> {
+  try {
+    return await apiFetch<any>('/pos/sync-pending', { method: 'POST' });
+  } catch (err) {
+    console.warn('[Auto-Sync] Pending offline sync notice:', err);
+    return { synced_count: 0 };
+  }
+}

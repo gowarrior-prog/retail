@@ -149,3 +149,60 @@ async def pos_checkout(req: POSCheckoutRequest):
     calc["status"] = "success"
     calc["local_bill"] = local_bill
     return calc
+
+from app.services.sqlite_sync_service import get_pending_local_bills
+from app.services.backup_service import backup_all_data_to_hard_drive
+
+@router.post("/pos/sync-pending")
+async def sync_pending_offline_data():
+    """
+    Auto-Sync Engine: When network / internet connection is restored,
+    syncs all pending local SQLite bills to remote cloud database and updates local hard drive backups.
+    """
+    pending = get_pending_local_bills()
+    if not pending:
+        return {"status": "success", "synced_count": 0, "message": "No pending offline bills to sync."}
+
+    synced_count = 0
+    async with SessionDb3() as db3:
+        for b in pending:
+            try:
+                billing_record = BillingHistoryModel(
+                    id=b["id"],
+                    invoice_number=b["invoice_number"],
+                    customer_phone=b.get("customer_phone"),
+                    total_amount=b["total_amount"],
+                    discount=b.get("discount", 0.0),
+                    tax=b.get("tax", 0.0),
+                    payment_mode=b.get("payment_mode", "CASH"),
+                    cashier_name=b.get("cashier_name", "Cashier"),
+                    item_details_json=b["item_details_json"]
+                )
+                db3.add(billing_record)
+
+                async with SessionDb1() as db1:
+                    order_record = OrderModel(
+                        id=str(uuid.uuid4()),
+                        total_amount=b["total_amount"],
+                        type="POS_COUNTER",
+                        status="COMPLETED",
+                        items_json=b["item_details_json"]
+                    )
+                    db1.add(order_record)
+                    await db1.commit()
+
+                mark_bill_as_synced(b["id"])
+                synced_count += 1
+            except Exception as e:
+                print(f"Error syncing pending bill #{b.get('invoice_number')}: {e}")
+
+        await db3.commit()
+
+    # Trigger hard drive backup update
+    await backup_all_data_to_hard_drive()
+
+    return {
+        "status": "success",
+        "synced_count": synced_count,
+        "message": f"Successfully synced {synced_count} pending offline bills to cloud database!"
+    }
