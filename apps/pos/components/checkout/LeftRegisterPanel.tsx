@@ -18,6 +18,7 @@ import { useCartStore, type CartItem } from '@/stores/useCartStore';
 import { posCheckout } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import ThermalReceiptModal from './ThermalReceiptModal';
+import PaymentModal from './PaymentModal';
 
 export default function LeftRegisterPanel() {
   const {
@@ -43,6 +44,7 @@ export default function LeftRegisterPanel() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState<any>(null);
   const [keypadBuffer, setKeypadBuffer] = useState<string>('');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
   // Keypad press handler
   const handleKeypadPress = (val: string) => {
@@ -294,7 +296,13 @@ export default function LeftRegisterPanel() {
         {/* Large Green PAYMENT Trigger Button */}
         <div className="flex flex-col shrink-0">
           <button
-            onClick={handlePaymentCheckout}
+            onClick={() => {
+              if (items.length === 0) {
+                alert('Cart is empty! Select items from the catalog first.');
+                return;
+              }
+              setShowPaymentModal(true);
+            }}
             disabled={isProcessing || items.length === 0}
             className="flex-1 w-full bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl shadow-md border border-emerald-700 flex flex-col items-center justify-center px-3 sm:px-4 py-2 transition group cursor-pointer disabled:opacity-50"
           >
@@ -334,7 +342,12 @@ export default function LeftRegisterPanel() {
         </div>
       </div>
 
-      {/* Thermal Receipt Modal */}
+      {/* Payment Drawer Modal */}
+      {showPaymentModal && (
+        <PaymentModal onClose={() => setShowPaymentModal(false)} />
+      )}
+
+      {/* Direct Thermal Receipt Modal */}
       {checkoutSuccess && (
         <ThermalReceiptModal
           receiptData={{

@@ -34,7 +34,7 @@ const generateAutoBarcode = (category: string) => {
 };
 
 export default function InventoryPage() {
-  const { products, isLoading, loadProducts } = useProductStore();
+  const { products, isLoading, loadProducts, addProduct, updateProductInStore, removeProductFromStore } = useProductStore();
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -138,13 +138,24 @@ export default function InventoryPage() {
 
     try {
       const created = await createProduct(productPayload);
-      const current = useProductStore.getState().products;
-      const updatedList = [created, ...current.filter(p => p.id !== created.id)];
-      useProductStore.setState({ products: updatedList, filteredProducts: updatedList });
-      await loadProducts(true);
+      addProduct(created);
     } catch (err: any) {
       console.warn('Product created offline fallback:', err);
-      await loadProducts(false);
+      const fallbackProduct: Product = {
+        id: `local-${Date.now()}`,
+        name: productPayload.name || 'Fabric Item',
+        price: productPayload.price || 0,
+        cost_price: productPayload.cost_price || 0,
+        profit_margin: productPayload.profit_margin || 0,
+        category: productPayload.category || 'Lawn',
+        stock: productPayload.stock || 0,
+        barcode: productPayload.barcode || null,
+        sku: productPayload.sku || null,
+        odoo_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      addProduct(fallbackProduct);
     }
 
     setIsAddModalOpen(false);
@@ -157,13 +168,10 @@ export default function InventoryPage() {
 
     try {
       const updated = await updateProduct(editingProduct.id, editingProduct);
-      const current = useProductStore.getState().products;
-      const updatedList = current.map(p => p.id === editingProduct.id ? updated : p);
-      useProductStore.setState({ products: updatedList, filteredProducts: updatedList });
-      await loadProducts(true);
+      updateProductInStore(editingProduct.id, updated);
     } catch (err: any) {
       console.warn('Product updated offline fallback:', err);
-      await loadProducts(false);
+      updateProductInStore(editingProduct.id, editingProduct);
     }
 
     setEditingProduct(null);
@@ -172,16 +180,11 @@ export default function InventoryPage() {
   const handleDeleteProduct = async (id: string) => {
     if (!confirm('Are you sure you want to delete this product?')) return;
 
-    const current = useProductStore.getState().products;
-    const updatedList = current.filter(p => p.id !== id);
-    useProductStore.setState({ products: updatedList, filteredProducts: updatedList });
-
+    removeProductFromStore(id);
     try {
       await deleteProduct(id);
-      await loadProducts(true);
     } catch (err: any) {
       console.warn('Product deleted offline fallback:', err);
-      await loadProducts(false);
     }
   };
 
