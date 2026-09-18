@@ -61,7 +61,7 @@ export default function PaymentModal({ onClose }: PaymentModalProps) {
     }
   };
 
-  const handleValidateCheckout = async () => {
+  const handleValidateCheckout = async (shouldPrint: boolean = true) => {
     if (items.length === 0) return;
 
     if (paymentMode === 'CASH' && tenderedAmountNum < totalPayable) {
@@ -97,11 +97,22 @@ export default function PaymentModal({ onClose }: PaymentModalProps) {
       };
 
       const res = await posCheckout(payload);
-      setCheckoutResult(res);
       setIsProcessing(false);
+
+      if (shouldPrint) {
+        setCheckoutResult(res);
+      } else {
+        // Direct New Order
+        clearCart();
+        onClose();
+      }
     } catch (err: any) {
       setIsProcessing(false);
       alert(`Checkout Notice: ${err.message || 'Saved in local offline database.'}`);
+      if (!shouldPrint) {
+        clearCart();
+        onClose();
+      }
     }
   };
 
@@ -309,21 +320,32 @@ export default function PaymentModal({ onClose }: PaymentModalProps) {
                 </div>
               )}
 
-              {/* Validate & Checkout Button */}
-              <button
-                onClick={handleValidateCheckout}
-                disabled={isProcessing || items.length === 0}
-                className="mt-auto w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-sm uppercase tracking-wide rounded-xl shadow-md border border-emerald-700 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <span>Processing Checkout...</span>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span>VALIDATE & PRINT BILL (Rs. {totalPayable.toLocaleString()})</span>
-                  </>
-                )}
-              </button>
+              {/* Action Buttons: Validate & Print vs Validate & Skip Print (Direct New Order) */}
+              <div className="mt-auto flex flex-col gap-2">
+                <button
+                  onClick={() => handleValidateCheckout(true)}
+                  disabled={isProcessing || items.length === 0}
+                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-extrabold text-xs uppercase tracking-wide rounded-xl shadow-md border border-emerald-700 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                >
+                  {isProcessing ? (
+                    <span>Processing Checkout...</span>
+                  ) : (
+                    <>
+                      <Printer className="w-4 h-4" />
+                      <span>VALIDATE & PRINT THERMAL BILL (Rs. {totalPayable.toLocaleString()})</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => handleValidateCheckout(false)}
+                  disabled={isProcessing || items.length === 0}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs tracking-wide rounded-xl border border-slate-900 flex items-center justify-center gap-2 transition cursor-pointer disabled:opacity-50"
+                >
+                  <ArrowRight className="w-4 h-4 text-emerald-400" />
+                  <span>VALIDATE & SKIP PRINT → DIRECT NEW ORDER</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
