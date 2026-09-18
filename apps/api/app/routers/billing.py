@@ -11,6 +11,8 @@ from app.services.pos_service import POSCheckoutRequest, calculate_pos_receipt
 from app.services.backup_service import load_local_backup_fallback
 from app.services.odoo_service import sync_odoo_khata, sync_odoo_purchases
 
+from app.services.sqlite_sync_service import save_bill_locally, mark_bill_as_synced, save_khata_locally, get_all_local_khata, get_pending_local_bills
+
 router = APIRouter(tags=["Billing, Khata & POS Analytics"])
 
 @router.post("/sync-odoo/khata")
@@ -33,10 +35,27 @@ async def sync_purchases_from_odoo():
 async def get_khata_records(db: AsyncSession = Depends(get_db3)):
     try:
         result = await db.execute(select(CustomerKhataModel))
-        return result.scalars().all()
+        rows = result.scalars().all()
+        if rows:
+            # Save to SQLite for offline availability
+            for r in rows:
+                try:
+                    save_khata_locally(
+                        cust_id=r.id, odoo_id=None, name=r.customer_name or "",
+                        phone=r.phone, email=None, balance=float(r.total_balance or 0)
+                    )
+                except Exception:
+                    pass
+            return rows
+        local_khata = get_all_local_khata()
+        if local_khata:
+            return local_khata
     except Exception as e:
-        print(f"Database error ({e}), reading khata from local hard drive JSON backup...")
-        return load_local_backup_fallback("khata")
+        print(f"DB3 offline ({e}), loading khata from SQLite...")
+        local_khata = get_all_local_khata()
+        if local_khata:
+            return local_khata
+        return load_local_backup_fallback("khata") or []
 
 @router.get("/purchases")
 async def get_shop_purchases(db: AsyncSession = Depends(get_db3)):
@@ -75,7 +94,6 @@ async def get_billing_history(db: AsyncSession = Depends(get_db3)):
             return fallback
         raise HTTPException(status_code=500, detail=str(e))
 
-from app.services.sqlite_sync_service import save_bill_locally, mark_bill_as_synced
 
 @router.post("/pos/checkout")
 async def pos_checkout(req: POSCheckoutRequest):
@@ -150,7 +168,7 @@ async def pos_checkout(req: POSCheckoutRequest):
     calc["local_bill"] = local_bill
     return calc
 
-from app.services.sqlite_sync_service import get_pending_local_bills
+
 from app.services.backup_service import backup_all_data_to_hard_drive
 
 @router.post("/pos/sync-pending")

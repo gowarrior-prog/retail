@@ -58,6 +58,34 @@ def init_sqlite_db():
     )
     """)
 
+    # Local Employees Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS local_employees (
+        id TEXT PRIMARY KEY,
+        odoo_id INTEGER,
+        name TEXT NOT NULL,
+        job_title TEXT,
+        department TEXT,
+        phone TEXT,
+        email TEXT,
+        status TEXT DEFAULT 'active',
+        updated_at TEXT NOT NULL
+    )
+    """)
+
+    # Local Khata (Credit Customers) Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS local_khata (
+        id TEXT PRIMARY KEY,
+        odoo_id INTEGER,
+        name TEXT NOT NULL,
+        phone TEXT,
+        email TEXT,
+        balance REAL DEFAULT 0.0,
+        updated_at TEXT NOT NULL
+    )
+    """)
+
     # Security Audit Logs Table
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS security_audit_logs (
@@ -184,3 +212,75 @@ def get_all_local_products() -> list:
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return rows
+
+# ── Employee SQLite CRUD ──────────────────────────────────────
+
+def save_employee_locally(emp_id: str, odoo_id: int | None, name: str, job_title: str | None, department: str | None, phone: str | None, email: str | None, status: str = "active") -> dict:
+    init_sqlite_db()
+    now_str = datetime.now().isoformat()
+    conn = sqlite3.connect(get_sqlite_path())
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO local_employees (id, odoo_id, name, job_title, department, phone, email, status, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            odoo_id=excluded.odoo_id, name=excluded.name, job_title=excluded.job_title,
+            department=excluded.department, phone=excluded.phone, email=excluded.email,
+            status=excluded.status, updated_at=excluded.updated_at
+    """, (emp_id, odoo_id or 0, name, job_title or "", department or "", phone or "", email or "", status, now_str))
+    conn.commit()
+    conn.close()
+    return {"id": emp_id, "name": name, "saved_locally": True}
+
+def get_all_local_employees() -> list:
+    init_sqlite_db()
+    conn = sqlite3.connect(get_sqlite_path())
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM local_employees ORDER BY name ASC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def delete_local_employee(emp_id: str):
+    conn = sqlite3.connect(get_sqlite_path())
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_employees WHERE id = ?", (emp_id,))
+    conn.commit()
+    conn.close()
+
+# ── Khata SQLite CRUD ──────────────────────────────────────
+
+def save_khata_locally(cust_id: str, odoo_id: int | None, name: str, phone: str | None, email: str | None, balance: float = 0.0) -> dict:
+    init_sqlite_db()
+    now_str = datetime.now().isoformat()
+    conn = sqlite3.connect(get_sqlite_path())
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO local_khata (id, odoo_id, name, phone, email, balance, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            odoo_id=excluded.odoo_id, name=excluded.name, phone=excluded.phone,
+            email=excluded.email, balance=excluded.balance, updated_at=excluded.updated_at
+    """, (cust_id, odoo_id or 0, name, phone or "", email or "", balance, now_str))
+    conn.commit()
+    conn.close()
+    return {"id": cust_id, "name": name, "saved_locally": True}
+
+def get_all_local_khata() -> list:
+    init_sqlite_db()
+    conn = sqlite3.connect(get_sqlite_path())
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM local_khata ORDER BY name ASC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def delete_local_khata(cust_id: str):
+    conn = sqlite3.connect(get_sqlite_path())
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_khata WHERE id = ?", (cust_id,))
+    conn.commit()
+    conn.close()
+

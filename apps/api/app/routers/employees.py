@@ -8,6 +8,9 @@ from app.models.db2_operations import EmployeeModel
 from app.schemas.employee import EmployeeCreate, EmployeeResponse
 from app.services.backup_service import load_local_backup_fallback
 from app.services.odoo_service import sync_odoo_employees
+from app.services.sqlite_sync_service import (
+    save_employee_locally, get_all_local_employees, delete_local_employee
+)
 
 router = APIRouter(tags=["Operations & Employees"])
 
@@ -24,7 +27,7 @@ async def get_employees(db: AsyncSession = Depends(get_db2)):
     try:
         result = await db.execute(select(EmployeeModel))
         rows = result.scalars().all()
-        return [
+        employees = [
             {
                 "id": r.id,
                 "name": r.name,
@@ -41,8 +44,27 @@ async def get_employees(db: AsyncSession = Depends(get_db2)):
             }
             for r in rows
         ]
+        if employees:
+            # Also save all to SQLite for offline availability
+            for emp in employees:
+                try:
+                    save_employee_locally(
+                        emp_id=emp["id"], odoo_id=None, name=emp["name"],
+                        job_title=emp.get("role"), department=None,
+                        phone=emp.get("phone"), email=None
+                    )
+                except Exception:
+                    pass
+            return employees
+        # Fallback: SQLite
+        local_emps = get_all_local_employees()
+        if local_emps:
+            return local_emps
     except Exception as e:
-        print(f"Database error ({e}), reading employees from local hard drive JSON backup...")
+        print(f"DB2 offline ({e}), loading employees from SQLite...")
+        local_emps = get_all_local_employees()
+        if local_emps:
+            return local_emps
         fallback = load_local_backup_fallback("employees")
         if fallback:
             return fallback
@@ -50,48 +72,66 @@ async def get_employees(db: AsyncSession = Depends(get_db2)):
 
 @router.post("/employees", response_model=EmployeeResponse)
 async def create_employee(emp: EmployeeCreate, db: AsyncSession = Depends(get_db2)):
-    res_active = await db.execute(select(EmployeeModel).filter(EmployeeModel.phone == emp.phone, EmployeeModel.is_deleted == False))
-    if res_active.scalars().first():
-        raise HTTPException(status_code=400, detail=f"An active staff member with phone '{emp.phone}' already exists.")
+    data = emp.model_dump(exclude_none=False)
+    if not data.get("id"):
+        data["id"] = str(uuid.uuid4())
 
-    res_deleted = await db.execute(select(EmployeeModel).filter(EmployeeModel.phone == emp.phone, EmployeeModel.is_deleted == True))
-    deleted_emp = res_deleted.scalars().first()
-    if deleted_emp:
-        deleted_emp.name = emp.name
-        deleted_emp.role = emp.role
-        deleted_emp.base_salary = emp.base_salary
-        deleted_emp.cnic = emp.cnic
-        deleted_emp.is_deleted = False
-        await db.commit()
-        await db.refresh(deleted_emp)
-        return deleted_emp
-
+    # 1. ALWAYS save to SQLite FIRST
     try:
-        data = emp.model_dump(exclude_none=False)
-        if not data.get("id"):
-            data["id"] = str(uuid.uuid4())
+        save_employee_locally(
+            emp_id=data["id"], odoo_id=None, name=data.get("name", ""),
+            job_title=data.get("role"), department=None,
+            phone=data.get("phone"), email=None
+        )
+    except Exception as sq_err:
+        print(f"SQLite employee save notice: {sq_err}")
+
+    # 2. Try PostgreSQL DB2
+    try:
+        res_active = await db.execute(select(EmployeeModel).filter(EmployeeModel.phone == emp.phone, EmployeeModel.is_deleted == False))
+        if res_active.scalars().first():
+            raise HTTPException(status_code=400, detail=f"An active staff member with phone '{emp.phone}' already exists.")
+
+        res_deleted = await db.execute(select(EmployeeModel).filter(EmployeeModel.phone == emp.phone, EmployeeModel.is_deleted == True))
+        deleted_emp = res_deleted.scalars().first()
+        if deleted_emp:
+            deleted_emp.name = emp.name
+            deleted_emp.role = emp.role
+            deleted_emp.base_salary = emp.base_salary
+            deleted_emp.cnic = emp.cnic
+            deleted_emp.is_deleted = False
+            await db.commit()
+            await db.refresh(deleted_emp)
+            return deleted_emp
+
         db_emp = EmployeeModel(**data)
         db.add(db_emp)
         await db.commit()
         await db.refresh(db_emp)
         return db_emp
+    except HTTPException:
+        raise
     except Exception as e:
-        await db.rollback()
-        err_msg = str(e)
-        if "UniqueViolationError" in err_msg or "unique constraint" in err_msg:
-            if "employees_phone_key" in err_msg:
-                raise HTTPException(status_code=400, detail=f"Phone number '{emp.phone}' is already registered to another staff member.")
-            if "employees_cnic_key" in err_msg:
-                raise HTTPException(status_code=400, detail=f"CNIC '{emp.cnic}' is already registered.")
-            raise HTTPException(status_code=400, detail="Duplicate staff details provided.")
-        raise HTTPException(status_code=400, detail=f"Failed to create employee: {err_msg}")
+        print(f"DB2 offline ({e}). Employee saved in local SQLite.")
+        return data
 
 @router.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: str, db: AsyncSession = Depends(get_db2)):
-    result = await db.execute(select(EmployeeModel).filter(EmployeeModel.id == employee_id))
-    db_emp = result.scalars().first()
-    if not db_emp:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    await db.delete(db_emp)
-    await db.commit()
-    return {"message": "Employee permanently deleted from DB2 successfully"}
+    # Always delete from SQLite
+    try:
+        delete_local_employee(employee_id)
+    except Exception:
+        pass
+
+    try:
+        result = await db.execute(select(EmployeeModel).filter(EmployeeModel.id == employee_id))
+        db_emp = result.scalars().first()
+        if not db_emp:
+            return {"message": "Employee deleted from local SQLite"}
+        await db.delete(db_emp)
+        await db.commit()
+        return {"message": "Employee deleted from DB2 and SQLite"}
+    except Exception as e:
+        print(f"DB2 offline ({e}). Employee deleted from local SQLite only.")
+        return {"message": "Employee deleted from local SQLite (DB2 offline)"}
+
