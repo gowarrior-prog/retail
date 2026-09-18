@@ -94,22 +94,39 @@ async def sync_all_odoo_products(limit: int = None) -> dict:
 
         prods = []
         offset = 0
-        batch_fetch_limit = 1000
+        batch_fetch_limit = 500
         while True:
-            fetch_res = json_rpc(rpc_url, "object", "execute_kw", [
-                ODOO_DB, uid, ODOO_PASS, "product.template", "search_read", [[]],
-                {
-                    "fields": ["id", "name", "list_price", "standard_price", "qty_available", "default_code", "categ_id", "description_sale"],
-                    "offset": offset,
-                    "limit": batch_fetch_limit
-                }
-            ], timeout=30)
-            
-            batch_items = fetch_res.get("result", []) if isinstance(fetch_res, dict) else []
+            fetch_res = None
+            try:
+                fetch_res = json_rpc(rpc_url, "object", "execute_kw", [
+                    ODOO_DB, uid, ODOO_PASS, "product.template", "search_read", [[]],
+                    {
+                        "fields": ["id", "name", "list_price", "standard_price", "qty_available", "default_code", "categ_id", "description_sale"],
+                        "offset": offset,
+                        "limit": batch_fetch_limit
+                    }
+                ], timeout=45)
+            except Exception as b_err:
+                print(f"Notice: Odoo full search_read notice at offset {offset}: {b_err}. Retrying without qty_available...")
+                try:
+                    fetch_res = json_rpc(rpc_url, "object", "execute_kw", [
+                        ODOO_DB, uid, ODOO_PASS, "product.template", "search_read", [[]],
+                        {
+                            "fields": ["id", "name", "list_price", "standard_price", "default_code", "categ_id", "description_sale"],
+                            "offset": offset,
+                            "limit": batch_fetch_limit
+                        }
+                    ], timeout=30)
+                except Exception as b_err2:
+                    print(f"Error fetching Odoo batch at offset {offset}: {b_err2}")
+                    break
+
+            batch_items = fetch_res.get("result", []) if isinstance(fetch_res, dict) and fetch_res.get("result") else []
             if not batch_items:
                 break
             prods.extend(batch_items)
             offset += len(batch_items)
+            print(f"Odoo sync: Fetched {len(prods)} / 7979 products...")
             
             if limit and limit > 0 and len(prods) >= limit:
                 prods = prods[:limit]
@@ -262,7 +279,7 @@ async def sync_odoo_employees() -> dict:
 
         emp_res = json_rpc(rpc_url, "object", "execute_kw", [
             ODOO_DB, uid, ODOO_PASS, "hr.employee", "search_read", [[]],
-            {"fields": ["id", "name", "work_phone", "mobile_phone", "job_title", "wage", "identification_id"], "limit": 200}
+            {"fields": ["id", "name", "work_phone", "mobile_phone", "job_title", "identification_id"], "limit": 200}
         ], timeout=10)
         
         employees_data = emp_res.get("result", []) if isinstance(emp_res, dict) and emp_res.get("result") is not None else []
@@ -275,29 +292,32 @@ async def sync_odoo_employees() -> dict:
             for emp in employees_data:
                 name = str(emp.get("name") or "Staff Member")
                 raw_phone = emp.get("mobile_phone") or emp.get("work_phone")
-                phone = str(raw_phone).strip() if raw_phone and str(raw_phone).strip() != "False" else f"EMP-{emp.get('id')}"
+                phone = str(raw_phone).strip() if raw_phone and str(raw_phone).strip() != "False" else ""
                 job = str(emp.get("job_title") or "SALES_EXECUTIVE")
-                salary = float(emp.get("wage") or 35000.0)
-                cnic = str(emp.get("identification_id") or "") or None
+                if job == "False":
+                    job = "SALES_EXECUTIVE"
+                cnic_raw = emp.get("identification_id")
+                cnic = str(cnic_raw).strip() if cnic_raw and str(cnic_raw).strip() != "False" else None
 
-                existing = existing_emps.get(phone)
+                # Use unique phone key to prevent UNIQUE constraint violations
+                db_phone = phone if phone else f"EMP-{emp.get('id')}"
+                existing = existing_emps.get(db_phone)
                 if existing:
                     existing.name = name
                     existing.role = job
-                    existing.base_salary = salary
                     if cnic:
                         existing.cnic = cnic
                 else:
                     new_emp = EmployeeModel(
                         id=str(uuid.uuid4()),
                         name=name,
-                        phone=phone if not phone.startswith("EMP-") else "",
+                        phone=db_phone,
                         cnic=cnic,
                         role=job,
-                        base_salary=salary
+                        base_salary=35000.0
                     )
                     db2.add(new_emp)
-                    existing_emps[phone] = new_emp
+                    existing_emps[db_phone] = new_emp
                 synced_count += 1
             await db2.commit()
 
@@ -339,8 +359,9 @@ async def sync_odoo_khata() -> dict:
                 phone = str(raw_phone).strip() if raw_phone and str(raw_phone).strip() != "False" else ""
                 balance = float(p.get("credit") or p.get("total_due") or p.get("debit") or 0.0)
 
-                lookup_key = phone if phone else f"CUST-{p.get('id')}"
-                existing = existing_khatas.get(lookup_key)
+                # Use unique key for DB phone field to prevent UNIQUE constraint violations on empty phones
+                db_phone = phone if phone else f"CUST-{p.get('id')}"
+                existing = existing_khatas.get(db_phone)
                 if existing:
                     existing.customer_name = name
                     existing.total_balance = balance
@@ -348,11 +369,11 @@ async def sync_odoo_khata() -> dict:
                     new_khata = CustomerKhataModel(
                         id=str(uuid.uuid4()),
                         customer_name=name,
-                        phone=phone,
+                        phone=db_phone,
                         total_balance=balance
                     )
                     db3.add(new_khata)
-                    existing_khatas[lookup_key] = new_khata
+                    existing_khatas[db_phone] = new_khata
                 synced_count += 1
             await db3.commit()
 

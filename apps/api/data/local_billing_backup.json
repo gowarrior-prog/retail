@@ -24,5 +24,18 @@
     "item_details_json": "[{\"product_id\": \"local-1789552115212-h73uc\", \"product_name\": \"3eeee\", \"price\": 2222.0, \"unit_price\": 2222.0, \"cost_price\": 222222.0, \"quantity\": 1, \"discount_percentage\": 0.0}]",
     "billing_date": "2026-09-16 10:14:52.463189+00:00",
     "created_at": "2026-09-16 10:14:52.463189+00:00"
+  },
+  {
+    "id": "e6c50b88-fc41-41b4-b21d-507346e9cdbe",
+    "invoice_number": "INV-19CCC9A1",
+    "customer_phone": null,
+    "total_amount": 6200.0,
+    "discount": 0.0,
+    "tax": 0.0,
+    "payment_mode": "CASH",
+    "cashier_name": "Talha",
+    "item_details_json": "[{\"product_id\": \"5c43a659-ab08-4467-a521-2cff639c9436\", \"product_name\": \"0102 [Front Stone LPMM]\", \"price\": 6200.0, \"unit_price\": 6200.0, \"cost_price\": 2300.0, \"quantity\": 1, \"discount_percentage\": 0.0}]",
+    "billing_date": "2026-09-18 00:34:39.835045+00:00",
+    "created_at": "2026-09-18 00:34:39.835045+00:00"
   }
 ]

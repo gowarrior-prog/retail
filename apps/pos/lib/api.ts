@@ -8,6 +8,13 @@ import {
   BillingRecordSchema,
   OdooSettingsSchema,
 } from './validators';
+import {
+  getOfflineStore,
+  setOfflineStore,
+  queueOfflineBill,
+  removeOfflineBill,
+  StoredBill,
+} from './offline-db';
 
 export function getApiBaseUrl(): string {
   if (typeof window !== 'undefined') {
@@ -31,6 +38,48 @@ export function setApiBaseUrl(ip: string): void {
       localStorage.setItem('pos_server_ip', ip.trim());
     }
   }
+}
+
+/**
+ * Auto-Discovers Local Shop Server IP on the local Wi-Fi / Router network.
+ * Scans candidate local IP subnets (localhost, 192.168.100.x, 192.168.1.x)
+ * so PC1, PC2, PC3 automatically find the main server without manual configuration.
+ */
+export async function discoverLocalServer(): Promise<{ success: boolean; url: string; message: string }> {
+  const candidates: string[] = [
+    getApiBaseUrl(),
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+    'http://192.168.100.2:8000',
+    'http://192.168.100.1:8000',
+    'http://192.168.1.2:8000',
+    'http://192.168.1.100:8000',
+  ];
+
+  // Unique candidates filter
+  const uniqueCandidates = Array.from(new Set(candidates));
+
+  for (const url of uniqueCandidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`${url}/`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        setApiBaseUrl(url);
+        return { success: true, url, message: `Auto-connected to local shop server at ${url}` };
+      }
+    } catch {
+      // Continue scanning next candidate
+    }
+  }
+
+  return {
+    success: false,
+    url: getApiBaseUrl(),
+    message: 'Could not discover server on local network. Running in 100% Offline Mode.',
+  };
 }
 
 export async function testServerConnection(targetIp?: string): Promise<{ success: boolean; message: string }> {
@@ -112,6 +161,8 @@ export function saveLocalProductCache(products: Product[]): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.setItem('pos_local_products_cache', JSON.stringify(products));
+    // Dual save to IndexedDB as well for large dataset protection
+    setOfflineStore('products', products);
   } catch (err) {
     console.warn('[API] Failed to save local product cache:', err);
   }
@@ -137,7 +188,12 @@ export function saveLocalOfflineBills(bills: OfflineBill[]): void {
 }
 
 export async function fetchProducts(): Promise<Product[]> {
-  const cached = getLocalProductCache();
+  // Load from IndexedDB / LocalStorage first so response is instant
+  let cached = getLocalProductCache();
+  if (!cached || cached.length === 0) {
+    cached = await getOfflineStore<Product>('products');
+  }
+
   try {
     const raw = await apiFetch<any[]>('/products');
     if (Array.isArray(raw)) {
@@ -145,7 +201,7 @@ export async function fetchProducts(): Promise<Product[]> {
       const serverMap = new Map<string, Product>();
       parsed.forEach(p => serverMap.set(p.id, p));
 
-      // Upload any local products that were created offline
+      // Upload any local products created offline
       const unsynced = cached.filter(c => c.id && c.id.startsWith('local-'));
       if (unsynced.length > 0) {
         for (const prod of unsynced) {
@@ -178,7 +234,7 @@ export async function fetchProducts(): Promise<Product[]> {
     }
     return cached;
   } catch (err) {
-    console.warn('[API] Backend offline during fetchProducts, using local cache:', err);
+    console.warn('[API] Backend offline during fetchProducts, returning offline cache:', err);
     return cached;
   }
 }
@@ -272,12 +328,17 @@ export async function deleteProduct(id: string): Promise<any> {
 }
 
 export async function fetchEmployees(): Promise<Employee[]> {
+  let cached = await getOfflineStore<Employee>('employees');
   try {
     const raw = await apiFetch<any[]>('/employees');
-    if (!Array.isArray(raw)) return [];
-    return z.array(EmployeeSchema.partial()).parse(raw) as Employee[];
+    if (Array.isArray(raw)) {
+      const parsed = z.array(EmployeeSchema.partial()).parse(raw) as Employee[];
+      await setOfflineStore('employees', parsed);
+      return parsed;
+    }
+    return cached;
   } catch {
-    return [];
+    return cached;
   }
 }
 
@@ -288,13 +349,21 @@ export async function createEmployee(data: any): Promise<Employee> {
       method: 'POST',
       body: JSON.stringify(validated),
     });
-    return EmployeeSchema.parse(res);
+    const emp = EmployeeSchema.parse(res);
+    const cached = await getOfflineStore<Employee>('employees');
+    await setOfflineStore('employees', [emp, ...cached.filter(e => e.id !== emp.id)]);
+    return emp;
   } catch {
-    return { id: `emp-${Date.now()}`, ...data } as Employee;
+    const localEmp = { id: `emp-${Date.now()}`, ...data } as Employee;
+    const cached = await getOfflineStore<Employee>('employees');
+    await setOfflineStore('employees', [localEmp, ...cached.filter(e => e.id !== localEmp.id)]);
+    return localEmp;
   }
 }
 
 export async function deleteEmployee(id: string): Promise<any> {
+  const cached = await getOfflineStore<Employee>('employees');
+  await setOfflineStore('employees', cached.filter(e => e.id !== id));
   try {
     return await apiFetch<any>(`/employees/${id}`, {
       method: 'DELETE',
@@ -305,10 +374,16 @@ export async function deleteEmployee(id: string): Promise<any> {
 }
 
 export async function fetchKhata(): Promise<any[]> {
+  let cached = await getOfflineStore<any>('khata');
   try {
-    return await apiFetch<any[]>('/khata');
+    const raw = await apiFetch<any[]>('/khata');
+    if (Array.isArray(raw)) {
+      await setOfflineStore('khata', raw);
+      return raw;
+    }
+    return cached;
   } catch {
-    return [];
+    return cached;
   }
 }
 
@@ -353,8 +428,11 @@ export async function posCheckout(data: any): Promise<any> {
       item_details_json: JSON.stringify(validated.items),
       created_at: new Date().toISOString(),
     };
+    
+    // Save to both LocalStorage and IndexedDB
     const pending = getLocalOfflineBills();
     saveLocalOfflineBills([...pending, offlineBill]);
+    await queueOfflineBill(offlineBill);
 
     return {
       status: 'success_offline',
@@ -457,7 +535,7 @@ export async function syncPendingOfflineData(): Promise<any> {
       }
     }
 
-    // 2. Sync local offline bills saved in localStorage to backend
+    // 2. Sync local offline bills saved in localStorage/IndexedDB to backend
     const pendingLocalBills = getLocalOfflineBills();
     if (pendingLocalBills.length > 0) {
       const remainingBills: OfflineBill[] = [];
@@ -476,6 +554,7 @@ export async function syncPendingOfflineData(): Promise<any> {
               items: JSON.parse(bill.item_details_json),
             }),
           });
+          await removeOfflineBill(bill.id);
         } catch (e) {
           remainingBills.push(bill);
         }

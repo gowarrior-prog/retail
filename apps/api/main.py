@@ -48,6 +48,8 @@ async def lifespan(app: FastAPI):
     
     yield
 
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+
 app = FastAPI(
     title="Retail Ecosystem Multi-Database Modular API",
     description="DB1 (Catalog, Orders, Users) | DB2 (Employees & Payroll) | DB3 (Billing, Khata, Purchases, Analytics)",
@@ -64,7 +66,21 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Multi-Database Modular System API is active across DB1, DB2, and DB3!"}
+    return {
+        "status": "online",
+        "message": "Multi-Database Modular System API is active across DB1, DB2, and DB3!",
+        "server": "Bilal Cloth POS Main Shop Server",
+    }
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_text(f"pong: {data}")
+    except WebSocketDisconnect:
+        pass
 
 # Register Modular Routers
 app.include_router(catalog_router)

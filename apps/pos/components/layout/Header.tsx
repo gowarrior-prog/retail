@@ -1,10 +1,9 @@
-'use client';
-import { useState } from 'react';
-import { Search, History, RefreshCw, X, Receipt, Layers, Lock, UserCircle2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Search, History, RefreshCw, X, Receipt, Layers, Lock, UserCircle2, Wifi, WifiOff } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProductStore } from '@/stores/useProductStore';
 import { useCartStore } from '@/stores/useCartStore';
-import { fetchBillingHistory, syncOdoo } from '@/lib/api';
+import { fetchBillingHistory, syncOdoo, discoverLocalServer, syncPendingOfflineData, getLocalOfflineBills } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import CashierSelectModal from '@/components/checkout/CashierSelectModal';
 
@@ -16,6 +15,35 @@ export default function Header() {
   const [showCashierModal, setShowCashierModal] = useState(false);
   const [historyRecords, setHistoryRecords] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [pendingBillsCount, setPendingBillsCount] = useState(0);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'offline'>('connected');
+
+  useEffect(() => {
+    // Check pending offline bills count
+    setPendingBillsCount(getLocalOfflineBills().length);
+
+    // Auto-discover local shop server IP on local network
+    discoverLocalServer().then((res) => {
+      if (res.success) {
+        setConnectionStatus('connected');
+        loadProducts();
+        syncPendingOfflineData().then(() => {
+          setPendingBillsCount(getLocalOfflineBills().length);
+        });
+      } else {
+        setConnectionStatus('offline');
+      }
+    });
+
+    // Background offline bill auto-sync loop every 15 seconds
+    const interval = setInterval(() => {
+      syncPendingOfflineData().then(() => {
+        setPendingBillsCount(getLocalOfflineBills().length);
+      });
+    }, 15000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const handleOpenHistory = async () => {
     setShowHistoryModal(true);
@@ -33,8 +61,11 @@ export default function Header() {
   const handleSyncOdoo = async () => {
     setSyncing(true);
     try {
+      await discoverLocalServer();
       await syncOdoo();
+      await syncPendingOfflineData();
       await loadProducts();
+      setPendingBillsCount(getLocalOfflineBills().length);
     } catch (err) {
       console.error('Failed to sync Odoo:', err);
     } finally {
@@ -79,10 +110,24 @@ export default function Header() {
           </div>
 
           <div className="hidden md:flex items-center gap-2 border-l border-slate-200 pl-3 text-xs shrink-0">
-            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-medium">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-              Terminal #04
-            </span>
+            {connectionStatus === 'connected' ? (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-medium" title="Connected to Local Shop Server">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <Wifi className="w-3 h-3 text-emerald-600" />
+                <span>LAN Server</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-medium" title="Running in 100% Offline IndexedDB Engine Mode">
+                <WifiOff className="w-3 h-3 text-amber-600" />
+                <span>Offline Engine</span>
+              </span>
+            )}
+
+            {pendingBillsCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold animate-bounce">
+                <span>{pendingBillsCount} Pending Sync</span>
+              </span>
+            )}
             <button
               onClick={handleOpenHistory}
               className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition text-[11px] font-semibold cursor-pointer active:scale-95"
