@@ -173,3 +173,14 @@ def mark_bill_as_synced(bill_id: str):
     cursor.execute("UPDATE local_bills SET sync_status = 'SYNCED' WHERE id = ?", (bill_id,))
     conn.commit()
     conn.close()
+
+def get_all_local_products() -> list:
+    """Fetches all products stored in local SQLite database (pos_local.db)."""
+    init_sqlite_db()
+    conn = sqlite3.connect(get_sqlite_path())
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM local_products ORDER BY updated_at DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows

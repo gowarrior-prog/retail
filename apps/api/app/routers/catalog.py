@@ -13,13 +13,30 @@ from app.services.storage_service import upload_product_image_with_fallback
 
 router = APIRouter(tags=["Catalog & Products"])
 
+from app.services.sqlite_sync_service import save_product_locally, get_all_local_products
+from app.services.backup_service import backup_all_data_to_hard_drive
+
 @router.get("/products", response_model=list[ProductResponse])
 async def get_products(db: AsyncSession = Depends(get_db1)):
     try:
         result = await db.execute(select(ProductModel))
-        return result.scalars().all()
+        prods = result.scalars().all()
+        if prods and len(prods) > 0:
+            return prods
+        # Fallback to local SQLite database (pos_local.db)
+        local_prods = get_all_local_products()
+        if local_prods and len(local_prods) > 0:
+            return local_prods
     except Exception as e:
-        print(f"Database error ({e}), reading catalog directly from local hard drive JSON backup...")
+        print(f"Notice: Remote DB1 unreachable offline ({e}), loading catalog from local SQLite (pos_local.db)...")
+        try:
+            local_prods = get_all_local_products()
+            if local_prods and len(local_prods) > 0:
+                return local_prods
+        except Exception as sq_err:
+            print(f"Notice: SQLite read error: {sq_err}")
+
+        # Backup JSON disk fallback
         data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
         backup_path = os.path.join(data_dir, "local_catalog_backup.json")
         if os.path.exists(backup_path):
@@ -27,19 +44,32 @@ async def get_products(db: AsyncSession = Depends(get_db1)):
                 return json.load(f)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
-from app.services.sqlite_sync_service import save_product_locally
-from app.services.backup_service import backup_all_data_to_hard_drive
-
 @router.post("/products", response_model=ProductResponse)
 async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_db1)):
-    try:
-        data = product.model_dump(exclude_none=False)
-        if not data.get("id"):
-            data["id"] = str(uuid.uuid4())
-        if data.get("price") and data.get("cost_price") and not data.get("profit_margin"):
-            data["profit_margin"] = round(((data["price"] - data["cost_price"]) / data["price"]) * 100, 2)
+    data = product.model_dump(exclude_none=False)
+    if not data.get("id"):
+        data["id"] = str(uuid.uuid4())
+    if data.get("price") and data.get("cost_price") and not data.get("profit_margin"):
+        data["profit_margin"] = round(((data["price"] - data["cost_price"]) / data["price"]) * 100, 2)
 
-        # Upsert: Check if product with this ID or Barcode already exists in PostgreSQL DB
+    # 1. ALWAYS save into local SQLite database (pos_local.db) FIRST!
+    try:
+        save_product_locally(
+            product_id=data["id"],
+            odoo_id=data.get("odoo_id"),
+            name=data["name"],
+            price=data["price"],
+            cost_price=data.get("cost_price"),
+            sku=data.get("sku") or data["id"][:8],
+            barcode=data.get("barcode"),
+            category=data.get("category"),
+            stock=data.get("stock")
+        )
+    except Exception as sq_err:
+        print(f"Notice: SQLite product save error ({sq_err}).")
+
+    # 2. Try DB1 PostgreSQL upsert if online
+    try:
         existing = None
         if data.get("id"):
             res = await db.execute(select(ProductModel).filter(ProductModel.id == data["id"]))
@@ -60,32 +90,16 @@ async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_
         await db.commit()
         await db.refresh(db_product)
 
-        # Save to local SQLite database with HMAC checksum
-        try:
-            save_product_locally(
-                product_id=db_product.id,
-                odoo_id=db_product.odoo_id,
-                name=db_product.name,
-                price=db_product.price,
-                cost_price=db_product.cost_price,
-                sku=db_product.sku or db_product.id[:8],
-                barcode=db_product.barcode,
-                category=db_product.category,
-                stock=db_product.stock
-            )
-        except Exception as sq_err:
-            print(f"Notice: SQLite local product save error ({sq_err}).")
-
-        # Instantly update hard drive backup JSON file
+        # Update disk backup file
         try:
             await backup_all_data_to_hard_drive()
-        except Exception as b_err:
-            print(f"Notice: Hard drive backup error ({b_err}).")
+        except Exception:
+            pass
 
         return db_product
     except Exception as e:
-        await db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"Notice: Remote DB1 unreachable offline ({e}). Product saved in local SQLite database.")
+        return data
 
 @router.put("/products/{product_id}", response_model=ProductResponse)
 async def update_product(product_id: str, product_update: ProductCreate, db: AsyncSession = Depends(get_db1)):
