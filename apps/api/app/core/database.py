@@ -20,9 +20,9 @@ url_db1 = get_async_url("DB1_DATABASE_URL")
 url_db2 = get_async_url("DB2_DATABASE_URL")
 url_db3 = get_async_url("DB3_DATABASE_URL")
 
-engine_db1 = create_async_engine(url_db1, echo=False, future=True)
-engine_db2 = create_async_engine(url_db2, echo=False, future=True)
-engine_db3 = create_async_engine(url_db3, echo=False, future=True)
+engine_db1 = create_async_engine(url_db1, echo=False, future=True, connect_args={"command_timeout": 3})
+engine_db2 = create_async_engine(url_db2, echo=False, future=True, connect_args={"command_timeout": 3})
+engine_db3 = create_async_engine(url_db3, echo=False, future=True, connect_args={"command_timeout": 3})
 
 # 3 Session Makers
 SessionDb1 = async_sessionmaker(engine_db1, class_=AsyncSession, expire_on_commit=False)
@@ -36,19 +36,32 @@ Base3 = declarative_base() # DB3: Billing, Khata, Purchases, Analytics
 
 Base = Base1
 
-# FastAPI Dependencies
+# FastAPI Dependencies with Fail-Safe Offline Fallback
 async def get_db1():
-    async with SessionDb1() as session:
-        yield session
+    try:
+        async with SessionDb1() as session:
+            yield session
+    except Exception as e:
+        print(f"Notice: PostgreSQL DB1 offline ({e}). Using local SQLite mode.")
+        yield None
 
 async def get_db2():
-    async with SessionDb2() as session:
-        yield session
+    try:
+        async with SessionDb2() as session:
+            yield session
+    except Exception as e:
+        print(f"Notice: PostgreSQL DB2 offline ({e}). Using local SQLite mode.")
+        yield None
 
 async def get_db3():
-    async with SessionDb3() as session:
-        yield session
+    try:
+        async with SessionDb3() as session:
+            yield session
+    except Exception as e:
+        print(f"Notice: PostgreSQL DB3 offline ({e}). Using local SQLite mode.")
+        yield None
 
 get_db = get_db1
 SessionLocal = SessionDb1
 engine = engine_db1
+

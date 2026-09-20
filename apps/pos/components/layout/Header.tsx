@@ -3,7 +3,7 @@ import { Search, History, RefreshCw, X, Receipt, Layers, Lock, UserCircle2, Wifi
 import { useUIStore } from '@/stores/useUIStore';
 import { useProductStore } from '@/stores/useProductStore';
 import { useCartStore } from '@/stores/useCartStore';
-import { fetchBillingHistory, syncOdoo, discoverLocalServer, syncPendingOfflineData, getLocalOfflineBills } from '@/lib/api';
+import { fetchBillingHistory, discoverLocalServer, syncPendingOfflineData, fetchOfflineSummary, fetchSystemStatus } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import CashierSelectModal from '@/components/checkout/CashierSelectModal';
 
@@ -17,30 +17,44 @@ export default function Header() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [pendingBillsCount, setPendingBillsCount] = useState(0);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'offline'>('connected');
+  const [cloudDbStatus, setCloudDbStatus] = useState<boolean>(true);
 
-  useEffect(() => {
-    // Check pending offline bills count
-    setPendingBillsCount(getLocalOfflineBills().length);
+  const updatePendingCount = () => {
+    fetchSystemStatus().then(res => {
+      if (res) {
+        if (typeof res.pending_bills_count === 'number') {
+          setPendingBillsCount(res.pending_bills_count);
+        }
+        setCloudDbStatus(!!res.cloud_db_connected);
+      }
+    }).catch(() => null);
+  };
 
-    // Auto-discover local shop server IP on local network
+  const checkConnectionAndSync = () => {
     discoverLocalServer().then((res) => {
       if (res.success) {
         setConnectionStatus('connected');
-        loadProducts();
         syncPendingOfflineData().then(() => {
-          setPendingBillsCount(getLocalOfflineBills().length);
+          updatePendingCount();
         });
       } else {
         setConnectionStatus('offline');
+        updatePendingCount();
       }
+    }).catch(() => {
+      setConnectionStatus('offline');
     });
+  };
 
-    // Background offline bill auto-sync loop every 15 seconds
+  useEffect(() => {
+    updatePendingCount();
+    loadProducts();
+    checkConnectionAndSync();
+
+    // Background connection health check & auto-sync loop every 10 seconds
     const interval = setInterval(() => {
-      syncPendingOfflineData().then(() => {
-        setPendingBillsCount(getLocalOfflineBills().length);
-      });
-    }, 15000);
+      checkConnectionAndSync();
+    }, 10000);
 
     return () => clearInterval(interval);
   }, []);
@@ -58,16 +72,16 @@ export default function Header() {
     }
   };
 
-  const handleSyncOdoo = async () => {
+  const handleSyncCloudDB = async () => {
     setSyncing(true);
     try {
       await discoverLocalServer();
-      await syncOdoo();
-      await syncPendingOfflineData();
-      await loadProducts();
-      setPendingBillsCount(getLocalOfflineBills().length);
+      const res = await syncPendingOfflineData();
+      await loadProducts(true);
+      updatePendingCount();
+      alert(`Cloud DB Sync Result: Synced ${res?.synced_count || 0} offline records to Cloud Database!`);
     } catch (err) {
-      console.error('Failed to sync Odoo:', err);
+      console.error('Failed to sync Cloud DB:', err);
     } finally {
       setSyncing(false);
     }
@@ -109,17 +123,28 @@ export default function Header() {
             </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-2 border-l border-slate-200 pl-3 text-xs shrink-0">
+          {/* Connection Status Badges - Always Visible on All Screen Sizes */}
+          <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 sm:pl-3 text-xs shrink-0">
             {connectionStatus === 'connected' ? (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-medium" title="Connected to Local Shop Server">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-medium" title="Connected to Local Shop Server (Port 8000)">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 <Wifi className="w-3 h-3 text-emerald-600" />
-                <span>LAN Server</span>
+                <span className="font-bold">Local Server</span>
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-medium" title="Running in 100% Offline IndexedDB Engine Mode">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-medium" title="Running in 100% Offline SQLite Engine Mode">
                 <WifiOff className="w-3 h-3 text-amber-600" />
-                <span>Offline Engine</span>
+                <span className="font-bold">Offline SQLite</span>
+              </span>
+            )}
+
+            {cloudDbStatus ? (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-semibold" title="Supabase Cloud Database Online">
+                <span>☁️ Cloud DB</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 text-[11px] font-medium" title="Cloud Database Disconnected">
+                <span>☁️ Cloud Disconnected</span>
               </span>
             )}
 
@@ -187,10 +212,10 @@ export default function Header() {
 
           <div className="flex items-center gap-0.5">
             <button
-              onClick={handleSyncOdoo}
+              onClick={handleSyncCloudDB}
               disabled={isSyncing}
               className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition cursor-pointer"
-              title="Sync Online"
+              title="Sync SQLite Data to Cloud Database"
             >
               <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
             </button>

@@ -1,25 +1,83 @@
 'use client';
-import { useEffect } from 'react';
+
+import { useEffect, useState, useRef } from 'react';
 import { useProductStore } from '@/stores/useProductStore';
+import { useCartStore } from '@/stores/useCartStore';
+import { Product } from '@/lib/api';
 import LeftRegisterPanel from '@/components/checkout/LeftRegisterPanel';
 import CategoryNavSlider from '@/components/checkout/CategoryNavSlider';
 import ProductCatalogGrid from '@/components/checkout/ProductCatalogGrid';
+import ProductDetailModal from '@/components/checkout/ProductDetailModal';
 
 export default function CheckoutPOSPage() {
-  const { loadProducts } = useProductStore();
+  const { loadProducts, products } = useProductStore();
+  const { addItem } = useCartStore();
+
+  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const barcodeBufferRef = useRef<string>('');
+  const lastKeyTimeRef = useRef<number>(0);
 
   useEffect(() => {
     loadProducts();
   }, [loadProducts]);
 
+  // Global Hardware Barcode Scanner Listener
+  // Hardware scanners type fast (< 50ms per key) followed by 'Enter' (key 13)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input/textarea element
+      const target = e.target as HTMLElement;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastKeyTimeRef.current > 150) {
+        barcodeBufferRef.current = '';
+      }
+      lastKeyTimeRef.current = now;
+
+      if (e.key === 'Enter') {
+        const code = barcodeBufferRef.current.trim();
+        if (code) {
+          const match = products.find(
+            (p) =>
+              (p.barcode && p.barcode.toLowerCase() === code.toLowerCase()) ||
+              (p.sku && p.sku.toLowerCase() === code.toLowerCase()) ||
+              p.id.toLowerCase() === code.toLowerCase()
+          );
+
+          if (match) {
+            addItem(match);
+            setScannedProduct(match);
+          }
+          barcodeBufferRef.current = '';
+        }
+      } else if (e.key.length === 1) {
+        barcodeBufferRef.current += e.key;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [products, addItem]);
+
   return (
     <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden flex flex-col bg-slate-100 select-none">
+      {/* Scanned Product Detail Modal */}
+      {scannedProduct && (
+        <ProductDetailModal
+          product={scannedProduct}
+          onClose={() => setScannedProduct(null)}
+        />
+      )}
+
       {/* Main Register Workspace */}
       <main className="flex-1 flex flex-col lg:flex-row overflow-hidden min-h-0">
         {/* Left Cart & Touch Keypad Panel */}
         <LeftRegisterPanel />
 
-        {/* Right Catalog & Filter Panel - hidden on mobile when cart is active, shown on lg+ */}
+        {/* Right Catalog & Filter Panel */}
         <section
           className="hidden lg:flex flex-1 flex-col h-full overflow-hidden bg-slate-50 min-w-0"
           data-purpose="product-catalog-section"
@@ -38,7 +96,7 @@ export default function CheckoutPOSPage() {
             <div className="flex items-center gap-3">
               <span className="flex items-center gap-1.5 font-medium">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                DB Connected
+                DB Connected • Barcode Scanner Ready
               </span>
               <span className="hidden md:inline font-mono">
                 REG-04 • POS/2026/09/0014

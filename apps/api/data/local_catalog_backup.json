@@ -1536,6 +1536,22 @@
     "updated_at": "2026-09-16 12:24:39.659451+00:00"
   },
   {
+    "id": "c0dc9bdb-9051-48ee-940e-d91b9629288c",
+    "name": "kenu3",
+    "description": null,
+    "price": 1111111.0,
+    "cost_price": 1111111111.0,
+    "profit_margin": -99900.0,
+    "stock": 1111111,
+    "sku": "GLA-67",
+    "barcode": "GLA-67",
+    "category": "Lawn",
+    "image_url": null,
+    "odoo_id": null,
+    "created_at": "2026-09-19 14:06:59.400827+00:00",
+    "updated_at": "2026-09-19 14:06:59.400827+00:00"
+  },
+  {
     "id": "ca8d546d-fdfb-4f33-87e4-fd36ee04e92b",
     "name": "0668 [Hand Made Fancy WPMM]",
     "description": null,
@@ -3262,6 +3278,22 @@
     "odoo_id": 872,
     "created_at": "2026-09-16 12:24:42.855374+00:00",
     "updated_at": "2026-09-16 12:24:42.855374+00:00"
+  },
+  {
+    "id": "207414aa-9307-4830-9875-4e724cd3b368",
+    "name": "2kej3ue",
+    "description": null,
+    "price": 22.0,
+    "cost_price": 22.0,
+    "profit_margin": 0.0,
+    "stock": 1,
+    "sku": "GLA-33",
+    "barcode": "GLA-33",
+    "category": "Lawn",
+    "image_url": null,
+    "odoo_id": null,
+    "created_at": "2026-09-19 14:20:23.316683+00:00",
+    "updated_at": "2026-09-19 14:20:23.316683+00:00"
   },
   {
     "id": "2d8b2f15-704a-4ebb-bd8b-800fbf9c504f",

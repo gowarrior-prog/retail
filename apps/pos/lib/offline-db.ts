@@ -1,26 +1,11 @@
 /**
- * Client-Side IndexedDB Offline Engine
- * Provides persistent 100% offline storage for 8000+ products, employees,
- * khata records, and queued offline checkout bills using native IndexedDB.
+ * Client-Side Cache Helper (Products, Employees, Khata)
+ * Note: Bills are NOT stored in browser IndexedDB for maximum security.
+ * All offline bills are handled server-side in SQLite (pos_local.db) with HMAC protection.
  */
 
 const DB_NAME = 'BilalPOS_OfflineDB';
-const DB_VERSION = 1;
-
-export interface StoredBill {
-  id: string;
-  invoice_number: string;
-  customer_phone?: string | null;
-  customer_name?: string | null;
-  payment_mode: string;
-  total_amount: number;
-  discount: number;
-  tax: number;
-  cashier_name: string;
-  item_details_json: string;
-  created_at: string;
-  synced?: boolean;
-}
+const DB_VERSION = 2;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -41,9 +26,6 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('khata')) {
         db.createObjectStore('khata', { keyPath: 'id' });
       }
-      if (!db.objectStoreNames.contains('offline_bills')) {
-        db.createObjectStore('offline_bills', { keyPath: 'id' });
-      }
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -53,7 +35,7 @@ function openDB(): Promise<IDBDatabase> {
 
 /** Save an array of items to an IndexedDB store */
 export async function setOfflineStore<T extends { id: string }>(
-  storeName: 'products' | 'employees' | 'khata' | 'offline_bills',
+  storeName: 'products' | 'employees' | 'khata',
   items: T[]
 ): Promise<void> {
   try {
@@ -80,7 +62,7 @@ export async function setOfflineStore<T extends { id: string }>(
 
 /** Get all items from an IndexedDB store */
 export async function getOfflineStore<T>(
-  storeName: 'products' | 'employees' | 'khata' | 'offline_bills'
+  storeName: 'products' | 'employees' | 'khata'
 ): Promise<T[]> {
   try {
     const db = await openDB();
@@ -95,39 +77,5 @@ export async function getOfflineStore<T>(
   } catch (err) {
     console.warn(`[OfflineDB] Error reading from ${storeName}:`, err);
     return [];
-  }
-}
-
-/** Save a single bill to offline bills queue */
-export async function queueOfflineBill(bill: StoredBill): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction('offline_bills', 'readwrite');
-    const store = tx.objectStore('offline_bills');
-    store.put(bill);
-
-    return new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn('[OfflineDB] Error queuing offline bill:', err);
-  }
-}
-
-/** Delete a bill from offline bills queue after successful sync */
-export async function removeOfflineBill(id: string): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction('offline_bills', 'readwrite');
-    const store = tx.objectStore('offline_bills');
-    store.delete(id);
-
-    return new Promise((resolve, reject) => {
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (err) {
-    console.warn('[OfflineDB] Error removing offline bill:', err);
   }
 }

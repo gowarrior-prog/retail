@@ -11,9 +11,6 @@ import {
 import {
   getOfflineStore,
   setOfflineStore,
-  queueOfflineBill,
-  removeOfflineBill,
-  StoredBill,
 } from './offline-db';
 
 export function getApiBaseUrl(): string {
@@ -40,38 +37,67 @@ export function setApiBaseUrl(ip: string): void {
   }
 }
 
-/**
- * Auto-Discovers Local Shop Server IP on the local Wi-Fi / Router network.
- * Scans candidate local IP subnets (localhost, 192.168.100.x, 192.168.1.x)
- * so PC1, PC2, PC3 automatically find the main server without manual configuration.
- */
 export async function discoverLocalServer(): Promise<{ success: boolean; url: string; message: string }> {
+  const currentBase = getApiBaseUrl();
+  const host = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+
   const candidates: string[] = [
-    getApiBaseUrl(),
+    currentBase,
     'http://localhost:8000',
     'http://127.0.0.1:8000',
+    `http://${host}:8000`,
     'http://192.168.100.2:8000',
     'http://192.168.100.1:8000',
     'http://192.168.1.2:8000',
     'http://192.168.1.100:8000',
+    'http://192.168.0.100:8000',
   ];
 
-  // Unique candidates filter
+  // If host is a local IP like 192.168.x.y, dynamically scan subnet IPs
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
+    const parts = host.split('.');
+    const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
+    for (let i = 1; i <= 254; i++) {
+      candidates.push(`http://${subnet}.${i}:8000`);
+    }
+  } else {
+    // Probe common subnets
+    ['192.168.1', '192.168.100', '192.168.0', '10.0.0'].forEach(sub => {
+      for (let i = 1; i <= 20; i++) {
+        candidates.push(`http://${sub}.${i}:8000`);
+      }
+    });
+  }
+
   const uniqueCandidates = Array.from(new Set(candidates));
 
-  for (const url of uniqueCandidates) {
+  // Probe in fast parallel batches of 15
+  const checkUrl = async (url: string): Promise<string | null> => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1200);
+      const timeoutId = setTimeout(() => controller.abort(), 600);
       const res = await fetch(`${url}/`, { signal: controller.signal });
       clearTimeout(timeoutId);
-
       if (res.ok) {
-        setApiBaseUrl(url);
-        return { success: true, url, message: `Auto-connected to local shop server at ${url}` };
+        const data = await res.json().catch(() => ({}));
+        if (data.server || data.status === 'online') {
+          return url;
+        }
       }
     } catch {
-      // Continue scanning next candidate
+      // Unreachable candidate
+    }
+    return null;
+  };
+
+  const batchSize = 15;
+  for (let i = 0; i < uniqueCandidates.length; i += batchSize) {
+    const batch = uniqueCandidates.slice(i, i + batchSize);
+    const results = await Promise.all(batch.map(url => checkUrl(url)));
+    const winner = results.find(u => u !== null);
+    if (winner) {
+      setApiBaseUrl(winner);
+      return { success: true, url: winner, message: `Auto-connected to local shop server at ${winner}` };
     }
   }
 
@@ -407,43 +433,10 @@ export async function fetchBillingHistory(): Promise<BillingRecord[]> {
 
 export async function posCheckout(data: any): Promise<any> {
   const validated = POSCheckoutSchema.parse(data);
-  try {
-    return await apiFetch<any>('/pos/checkout', {
-      method: 'POST',
-      body: JSON.stringify(validated),
-    });
-  } catch (err: any) {
-    console.warn('[API] Backend offline during checkout, saving bill to local offline storage:', err);
-    const invoiceNum = `INV-OFF-${Date.now().toString().slice(-6)}`;
-    const offlineBill: OfflineBill = {
-      id: `bill-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      invoice_number: invoiceNum,
-      customer_phone: validated.customer_phone || null,
-      customer_name: validated.customer_name || 'Walk-in Client',
-      payment_mode: validated.payment_mode || 'CASH',
-      total_amount: validated.amount_paid || 0,
-      discount: 0,
-      tax: 0,
-      cashier_name: validated.cashier_name || 'Cashier',
-      item_details_json: JSON.stringify(validated.items),
-      created_at: new Date().toISOString(),
-    };
-    
-    // Save to both LocalStorage and IndexedDB
-    const pending = getLocalOfflineBills();
-    saveLocalOfflineBills([...pending, offlineBill]);
-    await queueOfflineBill(offlineBill);
-
-    return {
-      status: 'success_offline',
-      invoice_number: invoiceNum,
-      grand_total: validated.amount_paid,
-      subtotal: validated.amount_paid,
-      discount_total: 0,
-      tax_total: 0,
-      change_returned: Math.max(0, (validated.amount_tendered || 0) - (validated.amount_paid || 0)),
-    };
-  }
+  return await apiFetch<any>('/pos/checkout', {
+    method: 'POST',
+    body: JSON.stringify(validated),
+  });
 }
 
 export async function syncOdoo(): Promise<any> {
@@ -482,7 +475,15 @@ export async function fetchOfflineSummary(): Promise<any> {
   try {
     return await apiFetch<any>('/offline-summary');
   } catch {
-    return { pending_bills_count: getLocalOfflineBills().length };
+    return { pending_bills_count: 0 };
+  }
+}
+
+export async function fetchSystemStatus(): Promise<any> {
+  try {
+    return await apiFetch<any>('/system-status');
+  } catch {
+    return { status: 'offline', cloud_db_connected: false, pending_bills_count: 0 };
   }
 }
 
@@ -505,67 +506,14 @@ export async function fetchOdooSettings(): Promise<any> {
 
 export async function syncPendingOfflineData(): Promise<any> {
   try {
-    // 1. Sync local offline products created while server was unreachable
-    const cachedProducts = getLocalProductCache();
-    const unsyncedProducts = cachedProducts.filter(p => p.id && p.id.startsWith('local-'));
-    if (unsyncedProducts.length > 0) {
-      for (const prod of unsyncedProducts) {
-        try {
-          const res = await apiFetch<any>('/products', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: prod.name,
-              price: prod.price,
-              cost_price: prod.cost_price,
-              profit_margin: prod.profit_margin,
-              category: prod.category,
-              image_url: prod.image_url,
-              stock: prod.stock,
-              barcode: prod.barcode,
-              sku: prod.sku,
-            }),
-          });
-          const serverProd = ProductSchema.parse(res);
-          const current = getLocalProductCache();
-          const updated = [serverProd, ...current.filter(p => p.id !== prod.id && p.id !== serverProd.id)];
-          saveLocalProductCache(updated);
-        } catch (e) {
-          console.warn(`[Auto-Sync] Could not sync local product ${prod.name}:`, e);
-        }
-      }
-    }
+    // 1. Sync local offline products created in SQLite to DB1
+    await apiFetch<any>('/products/sync-pending', { method: 'POST' }).catch(() => null);
 
-    // 2. Sync local offline bills saved in localStorage/IndexedDB to backend
-    const pendingLocalBills = getLocalOfflineBills();
-    if (pendingLocalBills.length > 0) {
-      const remainingBills: OfflineBill[] = [];
-      for (const bill of pendingLocalBills) {
-        try {
-          await apiFetch<any>('/pos/checkout', {
-            method: 'POST',
-            body: JSON.stringify({
-              store_id: 'store-1',
-              cashier_name: bill.cashier_name,
-              customer_phone: bill.customer_phone,
-              customer_name: bill.customer_name,
-              payment_mode: bill.payment_mode,
-              amount_paid: bill.total_amount,
-              amount_tendered: bill.total_amount,
-              items: JSON.parse(bill.item_details_json),
-            }),
-          });
-          await removeOfflineBill(bill.id);
-        } catch (e) {
-          remainingBills.push(bill);
-        }
-      }
-      saveLocalOfflineBills(remainingBills);
-    }
-
-    // 3. Sync pending SQLite bills on backend if available
+    // 2. Sync pending SQLite bills on backend to DB3 & DB1
     return await apiFetch<any>('/pos/sync-pending', { method: 'POST' });
   } catch (err) {
     console.warn('[Auto-Sync] Pending offline sync notice:', err);
     return { synced_count: 0 };
   }
 }
+

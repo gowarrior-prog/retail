@@ -9,20 +9,28 @@ use std::os::windows::process::CommandExt;
 fn main() {
     #[cfg(target_os = "windows")]
     {
-        // Silently launch python backend server in background with ZERO visible console window
+        // CREATE_NO_WINDOW = 0x08000000
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+
         let python_venv = r"d:\webapp\retail-ecosystem\apps\api\venv\Scripts\python.exe";
         let main_py = r"d:\webapp\retail-ecosystem\apps\api\main.py";
+        let batch_path = r"d:\webapp\retail-ecosystem\Start_Shop_Server.bat";
 
         if Path::new(python_venv).exists() && Path::new(main_py).exists() {
             let _ = Command::new(python_venv)
                 .arg(main_py)
                 .current_dir(r"d:\webapp\retail-ecosystem\apps\api")
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+        } else if Path::new(batch_path).exists() {
+            let _ = Command::new("cmd")
+                .args(["/C", batch_path])
+                .creation_flags(CREATE_NO_WINDOW)
                 .spawn();
         } else {
-            let _ = Command::new("cmd")
-                .args(["/C", "Start_Shop_Server.bat"])
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            let _ = Command::new("python")
+                .args([main_py])
+                .creation_flags(CREATE_NO_WINDOW)
                 .spawn();
         }
     }

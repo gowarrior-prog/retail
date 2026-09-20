@@ -278,5 +278,19 @@
     "leave_status": "NONE",
     "leave_reason": null,
     "created_at": "2026-09-16 12:35:21.223101+00:00"
+  },
+  {
+    "id": "02e7baa3-ffa4-4f90-9d10-e5aa86404e40",
+    "name": "www",
+    "phone": "11111111111111",
+    "cnic": null,
+    "role": "ADMIN",
+    "base_salary": 11111111111.0,
+    "is_deleted": false,
+    "attendance_status": "PRESENT",
+    "attendance_notes": null,
+    "leave_status": "NONE",
+    "leave_reason": null,
+    "created_at": "2026-09-19 01:32:09.326793+00:00"
   }
 ]

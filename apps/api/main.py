@@ -1,4 +1,8 @@
+import sys
+import os
 import asyncio
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,34 +21,54 @@ from app.routers import (
 from app.services.odoo_service import sync_all_odoo_products
 from app.services.backup_service import backup_all_data_to_hard_drive
 
+import os
+
+ENABLE_ODOO_SYNC = os.getenv("ENABLE_ODOO_SYNC", "false").lower() == "true"
+
 async def periodic_odoo_auto_sync():
-    """Background task: Automatically syncs catalog with Odoo ERP and backs up all entities to local hard drive every 15 minutes."""
+    """Background task: Automatically backs up data to local hard drive and syncs Odoo only if explicitly enabled."""
     while True:
         try:
-            print("[Auto-Sync] Running background Odoo synchronization & hard drive backup...")
-            res = await sync_all_odoo_products(limit=None)
-            print(f"[Auto-Sync] Odoo sync status: {res.get('status')} - {res.get('message')}")
-            
+            if ENABLE_ODOO_SYNC:
+                print("[Auto-Sync] Running background Odoo synchronization...")
+                res = await sync_all_odoo_products(limit=None)
+                print(f"[Auto-Sync] Odoo sync status: {res.get('status')} - {res.get('message')}")
+
             backup_stats = await backup_all_data_to_hard_drive()
-            print(f"[Auto-Sync] Hard drive full backup status: {backup_stats}")
+            print(f"[Auto-Sync] Hard drive full backup completed successfully.")
         except Exception as e:
-            print(f"[Auto-Sync] Background sync exception: {e}")
-        
+            pass
+
         # Sleep for 15 minutes (900 seconds)
         await asyncio.sleep(900)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Isolated schema creation per database
-    async with engine_db1.begin() as conn:
-        await conn.run_sync(Base1.metadata.create_all)
-    async with engine_db2.begin() as conn:
-        await conn.run_sync(Base2.metadata.create_all)
-    async with engine_db3.begin() as conn:
-        await conn.run_sync(Base3.metadata.create_all)
+    # Isolated schema creation per database with fail-safe try-except
+    try:
+        async with engine_db1.begin() as conn:
+            await conn.run_sync(Base1.metadata.create_all)
+    except Exception as e:
+        print(f"Notice: Could not connect to DB1 on startup ({e}). Running in offline SQLite mode.")
+
+    try:
+        async with engine_db2.begin() as conn:
+            await conn.run_sync(Base2.metadata.create_all)
+    except Exception as e:
+        print(f"Notice: Could not connect to DB2 on startup ({e}). Running in offline SQLite mode.")
+
+    try:
+        async with engine_db3.begin() as conn:
+            await conn.run_sync(Base3.metadata.create_all)
+    except Exception as e:
+        print(f"Notice: Could not connect to DB3 on startup ({e}). Running in offline SQLite mode.")
     
     # Run initial hard drive backup on startup
-    asyncio.create_task(backup_all_data_to_hard_drive())
+    try:
+        asyncio.create_task(backup_all_data_to_hard_drive())
+    except Exception:
+        pass
     
     yield
 
@@ -96,6 +120,38 @@ async def get_offline_summary():
     """Returns local hard drive file inspection summary for POS UI display and 2nd PC network access."""
     return get_offline_data_summary()
 
+from app.services.sqlite_sync_service import get_pending_local_bills
+from sqlalchemy import text
+
+@app.get("/system-status")
+async def get_system_status():
+    """Diagnostic status for POS UI: checks local server and Supabase Cloud DB connectivity."""
+    db1_online = False
+    try:
+        async with SessionDb1() as s1:
+            await s1.execute(text("SELECT 1"))
+            db1_online = True
+    except Exception:
+        pass
+
+    db3_online = False
+    try:
+        async with SessionDb3() as s3:
+            await s3.execute(text("SELECT 1"))
+            db3_online = True
+    except Exception:
+        pass
+
+    pending_bills = get_pending_local_bills()
+    return {
+        "status": "online",
+        "cloud_db_connected": db1_online or db3_online,
+        "db1_online": db1_online,
+        "db3_online": db3_online,
+        "pending_bills_count": len(pending_bills),
+        "server": "Bilal Cloth POS Main Shop Server",
+    }
+
 @app.post("/backup-now")
 async def trigger_manual_backup():
     """Triggers an instant complete backup of all 5 modules (Products, Employees, Invoices, Khata, Purchases) to local hard drive."""
@@ -103,10 +159,20 @@ async def trigger_manual_backup():
     summary = get_offline_data_summary()
     return {"status": "success", "message": "All database entities (Products, Employees, Invoices, Khata Ledger, Purchases) successfully backed up to local hard drive!", "stats": stats, "summary": summary}
 
+
 if __name__ == "__main__":
     import os
     import uvicorn
     host = os.getenv("API_HOST", "0.0.0.0")
     port = int(os.getenv("API_PORT", "8000"))
-    print(f"Starting Bilal POS Multi-Terminal Server listening on http://{host}:{port} across shop LAN...")
-    uvicorn.run("main:app", host=host, port=port, reload=False)
+    print(f"Starting High-Speed Scalable Bilal POS Server listening on http://{host}:{port}...")
+    uvicorn.run(
+        "main:app",
+        host=host,
+        port=port,
+        reload=False,
+        access_log=False,
+        limit_concurrency=1000,
+        timeout_keep_alive=120,
+        backlog=2048
+    )

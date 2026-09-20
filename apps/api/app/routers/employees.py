@@ -24,51 +24,55 @@ async def sync_employees_from_odoo():
 
 @router.get("/employees")
 async def get_employees(db: AsyncSession = Depends(get_db2)):
-    try:
-        result = await db.execute(select(EmployeeModel))
-        rows = result.scalars().all()
-        employees = [
-            {
-                "id": r.id,
-                "name": r.name,
-                "phone": r.phone,
-                "cnic": r.cnic,
-                "role": r.role,
-                "base_salary": r.base_salary,
-                "is_deleted": r.is_deleted,
-                "attendance_status": r.attendance_status,
-                "attendance_notes": r.attendance_notes,
-                "leave_status": r.leave_status,
-                "leave_reason": r.leave_reason,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in rows
-        ]
-        if employees:
-            # Also save all to SQLite for offline availability
-            for emp in employees:
-                try:
-                    save_employee_locally(
-                        emp_id=emp["id"], odoo_id=None, name=emp["name"],
-                        job_title=emp.get("role"), department=None,
-                        phone=emp.get("phone"), email=None
-                    )
-                except Exception:
-                    pass
-            return employees
-        # Fallback: SQLite
-        local_emps = get_all_local_employees()
-        if local_emps:
-            return local_emps
-    except Exception as e:
-        print(f"DB2 offline ({e}), loading employees from SQLite...")
-        local_emps = get_all_local_employees()
-        if local_emps:
-            return local_emps
-        fallback = load_local_backup_fallback("employees")
-        if fallback:
-            return fallback
-        raise HTTPException(status_code=500, detail=str(e))
+    local_emps = get_all_local_employees()
+    local_map = {}
+    for le in local_emps:
+        local_map[le["id"]] = {
+            "id": le["id"],
+            "name": le["name"],
+            "phone": le.get("phone", ""),
+            "cnic": None,
+            "role": le.get("job_title") or "SALES_EXECUTIVE",
+            "base_salary": 0.0,
+            "is_deleted": False,
+            "attendance_status": "PRESENT",
+            "attendance_notes": None,
+            "created_at": le.get("updated_at"),
+        }
+
+    if db is not None:
+        try:
+            result = await db.execute(select(EmployeeModel))
+            rows = result.scalars().all()
+            if rows:
+                for r in rows:
+                    try:
+                        save_employee_locally(
+                            emp_id=r.id, odoo_id=None, name=r.name,
+                            job_title=r.role, department=None,
+                            phone=r.phone, email=None
+                        )
+                    except Exception:
+                        pass
+                    local_map[r.id] = {
+                        "id": r.id,
+                        "name": r.name,
+                        "phone": r.phone,
+                        "cnic": r.cnic,
+                        "role": r.role,
+                        "base_salary": r.base_salary,
+                        "is_deleted": r.is_deleted,
+                        "attendance_status": r.attendance_status,
+                        "attendance_notes": r.attendance_notes,
+                        "leave_status": r.leave_status,
+                        "leave_reason": r.leave_reason,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+        except Exception as e:
+            print(f"DB2 offline ({e}), loading employees from SQLite...")
+
+    return list(local_map.values())
+
 
 @router.post("/employees", response_model=EmployeeResponse)
 async def create_employee(emp: EmployeeCreate, db: AsyncSession = Depends(get_db2)):

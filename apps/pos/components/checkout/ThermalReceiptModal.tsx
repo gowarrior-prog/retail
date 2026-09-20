@@ -157,7 +157,21 @@ export default function ThermalReceiptModal({ receiptData, onClose }: ThermalRec
       </html>
     `;
 
-    // Direct hidden iframe print mechanism
+    // 1. Try window.open first for full print preview support in Edge WebView2
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (printWindow) {
+      printWindow.document.open();
+      printWindow.document.write(printHtml);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 350);
+      return;
+    }
+
+    // 2. Direct hidden iframe fallback mechanism
     let iframe = document.getElementById('receipt-print-iframe') as HTMLIFrameElement;
     if (!iframe) {
       iframe = document.createElement('iframe');
@@ -180,7 +194,7 @@ export default function ThermalReceiptModal({ receiptData, onClose }: ThermalRec
       setTimeout(() => {
         iframe.contentWindow?.focus();
         iframe.contentWindow?.print();
-      }, 300);
+      }, 350);
     }
   };
 

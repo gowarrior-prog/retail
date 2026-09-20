@@ -1,27 +1,21 @@
 @echo off
-title Bilal Cloth POS - Main Shop Server (PC 1)
-color 0A
-echo =========================================================
-echo       BILAL CLOTH ^& SILK CENTER - MAIN SHOP SERVER
-echo =========================================================
-echo Host: 0.0.0.0 (Listening on All Shop Network Cards)
-echo Port: 8000
-echo =========================================================
-echo.
+:: Bilal Cloth POS - Single File Silent Background Shop Server
+:: Automatically opens Windows Firewall Port 8000 and runs hidden without CMD window.
 
+if "%~1"=="-background" goto RUN_SERVER
+
+:: Launch hidden background process and exit CMD window immediately
+powershell -Command "Start-Process '%~f0' -ArgumentList '-background' -WindowStyle Hidden"
+exit /b
+
+:RUN_SERVER
 cd /d "%~dp0apps\api"
 
+:: Ensure Windows Firewall rule allows inbound LAN connections on TCP Port 8000
+netsh advfirewall firewall add rule name="Bilal POS Server (Port 8000)" dir=in action=allow protocol=TCP localport=8000 >nul 2>&1
+
 if exist "%~dp0apps\api\venv\Scripts\python.exe" (
-    echo [INFO] Starting Python server using virtual environment...
     "%~dp0apps\api\venv\Scripts\python.exe" main.py
 ) else (
-    echo [INFO] Starting Python server using system Python...
     python main.py
 )
-
-if %errorlevel% neq 0 (
-    echo.
-    echo [ERROR] Server stopped with error code %errorlevel%.
-)
-
-pause
