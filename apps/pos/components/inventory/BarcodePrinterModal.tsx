@@ -35,12 +35,12 @@ const DEFAULT_TEMPLATES: LabelTemplate[] = [
     showPrice: true,
     labelWidthMm: 50,
     labelHeightMm: 25,
-    barcodeWidthMm: 46,
-    barcodeHeightMm: 10.5,
-    shopFontSizePt: 6.5,
-    titleFontSizePt: 7.5,
-    barcodeTextFontSizePt: 7,
-    priceFontSizePt: 8.5,
+    barcodeWidthMm: 44,
+    barcodeHeightMm: 8.5,
+    shopFontSizePt: 6,
+    titleFontSizePt: 7,
+    barcodeTextFontSizePt: 6,
+    priceFontSizePt: 7.5,
   },
   {
     id: 'compact_38x25',
@@ -50,27 +50,27 @@ const DEFAULT_TEMPLATES: LabelTemplate[] = [
     showPrice: true,
     labelWidthMm: 38,
     labelHeightMm: 25,
-    barcodeWidthMm: 36,
-    barcodeHeightMm: 12,
-    shopFontSizePt: 6,
-    titleFontSizePt: 7.5,
-    barcodeTextFontSizePt: 6.5,
-    priceFontSizePt: 8.5,
+    barcodeWidthMm: 34,
+    barcodeHeightMm: 8.5,
+    shopFontSizePt: 5.5,
+    titleFontSizePt: 6.5,
+    barcodeTextFontSizePt: 5.5,
+    priceFontSizePt: 7,
   },
   {
-    id: 'vertical_tag_25x50',
-    name: 'Vertical Hanging Tag (25mm x 50mm)',
+    id: 'medium_50x30',
+    name: 'Medium Label (50mm x 30mm)',
     shopName: 'Bilal Cloth & Silk Center Narowal',
     showShopName: true,
     showPrice: true,
-    labelWidthMm: 25,
-    labelHeightMm: 50,
-    barcodeWidthMm: 23.5,
-    barcodeHeightMm: 28,
-    shopFontSizePt: 6,
+    labelWidthMm: 50,
+    labelHeightMm: 30,
+    barcodeWidthMm: 44,
+    barcodeHeightMm: 10,
+    shopFontSizePt: 6.5,
     titleFontSizePt: 7.5,
     barcodeTextFontSizePt: 6.5,
-    priceFontSizePt: 8.5,
+    priceFontSizePt: 8,
   },
 ];
 
@@ -86,18 +86,18 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('standard_50x25');
 
   // Active Editing Fields
-  const [templateName, setTemplateName] = useState<string>('My Custom BarTender Design');
+  const [templateName, setTemplateName] = useState<string>('TSC Standard Label (50mm x 25mm)');
   const [shopName, setShopName] = useState<string>('Bilal Cloth & Silk Center Narowal');
   const [showShopName, setShowShopName] = useState<boolean>(true);
   const [showPrice, setShowPrice] = useState<boolean>(true);
   const [labelWidthMm, setLabelWidthMm] = useState<number>(50);
   const [labelHeightMm, setLabelHeightMm] = useState<number>(25);
-  const [barcodeWidthMm, setBarcodeWidthMm] = useState<number>(48);
-  const [barcodeHeightMm, setBarcodeHeightMm] = useState<number>(13);
-  const [shopFontSizePt, setShopFontSizePt] = useState<number>(6.5);
-  const [titleFontSizePt, setTitleFontSizePt] = useState<number>(8);
-  const [barcodeTextFontSizePt, setBarcodeTextFontSizePt] = useState<number>(7);
-  const [priceFontSizePt, setPriceFontSizePt] = useState<number>(9);
+  const [barcodeWidthMm, setBarcodeWidthMm] = useState<number>(44);
+  const [barcodeHeightMm, setBarcodeHeightMm] = useState<number>(8.5);
+  const [shopFontSizePt, setShopFontSizePt] = useState<number>(6);
+  const [titleFontSizePt, setTitleFontSizePt] = useState<number>(7);
+  const [barcodeTextFontSizePt, setBarcodeTextFontSizePt] = useState<number>(6);
+  const [priceFontSizePt, setPriceFontSizePt] = useState<number>(7.5);
 
   const [copiesCount, setCopiesCount] = useState<number>(1);
   const [copiedSuccess, setCopiedSuccess] = useState<boolean>(false);
@@ -112,12 +112,36 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setTemplates(parsed);
+          // Discard vertical templates and recalibrate oversized standard_50x25
+          const sanitized = parsed
+            .filter((t: any) => t.id !== 'vertical_tag_25x50' && (t.labelWidthMm || 50) >= (t.labelHeightMm || 25))
+            .map((t: any) => {
+              if (t.id === 'standard_50x25' && t.barcodeHeightMm > 9) {
+                return {
+                  ...t,
+                  barcodeWidthMm: 44,
+                  barcodeHeightMm: 8.5,
+                  shopFontSizePt: 6,
+                  titleFontSizePt: 7,
+                  barcodeTextFontSizePt: 6,
+                  priceFontSizePt: 7.5,
+                };
+              }
+              return t;
+            });
+
+          if (sanitized.length > 0) {
+            setTemplates(sanitized);
+          } else {
+            setTemplates(DEFAULT_TEMPLATES);
+          }
         }
       }
       const lastId = localStorage.getItem(LAST_USED_TEMPLATE_KEY);
-      if (lastId) {
+      if (lastId && lastId !== 'vertical_tag_25x50') {
         setSelectedTemplateId(lastId);
+      } else {
+        setSelectedTemplateId('standard_50x25');
       }
     } catch (e) {
       console.error('Error loading saved label templates:', e);
@@ -169,10 +193,10 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
         bwipjs.toCanvas(printCanvasRef.current, {
           bcid: 'code128',
           text: barcodeValue,
-          scale: 6,
-          height: 20,
+          scale: 5,
+          height: 14,
           includetext: false,
-          paddingwidth: 4,
+          paddingwidth: 2,
           backgroundcolor: 'FFFFFF',
         });
       } catch (err) {
@@ -260,19 +284,26 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
             @media print {
               @page {
                 size: ${labelWidthMm}mm ${labelHeightMm}mm;
-                margin: 0;
+                margin: 0 !important;
               }
               html, body {
                 width: ${labelWidthMm}mm !important;
                 height: ${labelHeightMm}mm !important;
+                max-height: ${labelHeightMm}mm !important;
                 margin: 0 !important;
                 padding: 0 !important;
                 overflow: hidden !important;
+                box-sizing: border-box !important;
               }
               .sticker-card {
+                width: ${labelWidthMm}mm !important;
+                height: ${labelHeightMm}mm !important;
+                max-height: ${labelHeightMm}mm !important;
                 page-break-after: always !important;
                 page-break-inside: avoid !important;
                 break-inside: avoid !important;
+                box-sizing: border-box !important;
+                overflow: hidden !important;
               }
               .sticker-card:last-child {
                 page-break-after: auto !important;
@@ -290,35 +321,36 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
               width: ${labelWidthMm}mm;
               height: ${labelHeightMm}mm;
               max-height: ${labelHeightMm}mm;
-              padding: 1.2mm 1.5mm 0.8mm 1.5mm;
+              padding: 0.6mm 1.2mm 0.4mm 1.2mm;
               display: flex;
               flex-direction: column;
               align-items: center;
               justify-content: space-between;
               background: #fff;
               overflow: hidden;
+              box-sizing: border-box;
             }
             .shop-name {
               font-size: ${shopFontSizePt}pt;
               font-weight: bold;
               text-align: center;
-              line-height: 1.1;
+              line-height: 1;
               width: 100%;
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
-              margin-bottom: 0.3mm;
+              margin-bottom: 0.2mm;
             }
             .product-title {
               font-size: ${titleFontSizePt}pt;
               font-weight: 800;
               text-align: center;
-              line-height: 1.1;
+              line-height: 1;
               width: 100%;
               white-space: nowrap;
               overflow: hidden;
               text-overflow: ellipsis;
-              margin-bottom: 0.3mm;
+              margin-bottom: 0.2mm;
             }
             .barcode-container {
               width: 100%;
@@ -326,11 +358,12 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
               flex-direction: column;
               align-items: center;
               justify-content: center;
-              margin: 0.3mm 0;
+              margin: 0;
             }
             .barcode-img {
               width: ${barcodeWidthMm}mm;
               height: ${barcodeHeightMm}mm;
+              max-height: ${barcodeHeightMm}mm;
               object-fit: fill;
               display: block;
               margin: 0 auto;
@@ -343,9 +376,9 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
               font-family: 'Courier New', Courier, monospace;
               font-weight: bold;
               text-align: center;
-              letter-spacing: 0.8px;
+              letter-spacing: 0.5px;
               line-height: 1;
-              margin-top: 0.3mm;
+              margin-top: 0.2mm;
             }
             .price-tag {
               font-size: ${priceFontSizePt}pt;
@@ -353,6 +386,7 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
               text-align: right;
               line-height: 1;
               width: 100%;
+              margin-top: 0.2mm;
             }
           </style>
         </head>
@@ -469,9 +503,10 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
             <div
               style={{
                 width: `${labelWidthMm * 4.5}px`,
-                minHeight: `${labelHeightMm * 4.5}px`,
+                height: `${labelHeightMm * 4.5}px`,
+                maxHeight: `${labelHeightMm * 4.5}px`,
               }}
-              className="bg-white border-2 border-slate-900 rounded-lg p-2 shadow-md flex flex-col justify-between items-center transition-all overflow-hidden"
+              className="bg-white border-2 border-slate-900 rounded-lg px-2 py-1 shadow-md flex flex-col justify-between items-center transition-all overflow-hidden"
             >
               {showShopName && (
                 <div
@@ -484,13 +519,13 @@ export default function BarcodePrinterModal({ product, onClose }: BarcodePrinter
 
               <div
                 style={{ fontSize: `${titleFontSizePt * 1.5}px` }}
-                className="font-black text-slate-900 text-center truncate w-full my-0.5"
+                className="font-black text-slate-900 text-center truncate w-full"
               >
                 {product.name}
               </div>
 
-              <div className="flex flex-col items-center justify-center w-full my-0.5">
-                <canvas ref={canvasRef} className="max-w-full h-9 object-contain" />
+              <div className="flex flex-col items-center justify-center w-full">
+                <canvas ref={canvasRef} className="max-w-full h-8 object-contain" />
                 <div
                   style={{ fontSize: `${barcodeTextFontSizePt * 1.5}px` }}
                   className="font-mono font-bold text-slate-900 tracking-wider text-center"

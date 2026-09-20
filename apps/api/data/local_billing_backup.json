@@ -232,5 +232,44 @@
     "item_details_json": "[{\"product_id\": \"4e425893-2530-4c93-9baf-bea6a02192d0\", \"product_name\": \"111\", \"price\": 111.0, \"unit_price\": 111.0, \"cost_price\": 111.0, \"quantity\": 1, \"discount_percentage\": 0.0}]",
     "billing_date": "2026-09-19 09:17:59.442412+00:00",
     "created_at": "2026-09-19 09:17:59.442412+00:00"
+  },
+  {
+    "id": "bf84ea3e-961c-4552-bb58-7a3216513068",
+    "invoice_number": "INV-25A2135C",
+    "customer_phone": "",
+    "total_amount": 23500.0,
+    "discount": 0.0,
+    "tax": 0.0,
+    "payment_mode": "CASH",
+    "cashier_name": "Admin",
+    "item_details_json": "[{\"product_id\": \"504452eb-c311-4e04-89e5-82160c11e355\", \"product_name\": \"0003 [Bridal Maxcy NKMMM]\", \"price\": 23500.0, \"unit_price\": 23500.0, \"cost_price\": 9200.0, \"quantity\": 1, \"discount_percentage\": 0.0}]",
+    "billing_date": "2026-09-20 13:38:18.701412+00:00",
+    "created_at": "2026-09-20 13:38:18.701412+00:00"
+  },
+  {
+    "id": "d9ae5179-a7e7-4fbb-a750-7532a68910d3",
+    "invoice_number": "INV-3B2E1F2E",
+    "customer_phone": "",
+    "total_amount": 23500.0,
+    "discount": 0.0,
+    "tax": 0.0,
+    "payment_mode": "CASH",
+    "cashier_name": "Admin",
+    "item_details_json": "[{\"product_id\": \"504452eb-c311-4e04-89e5-82160c11e355\", \"product_name\": \"0003 [Bridal Maxcy NKMMM]\", \"price\": 23500.0, \"unit_price\": 23500.0, \"cost_price\": 9200.0, \"quantity\": 1, \"discount_percentage\": 0.0}]",
+    "billing_date": "2026-09-20 13:41:13.173492+00:00",
+    "created_at": "2026-09-20 13:41:13.173492+00:00"
+  },
+  {
+    "id": "a57d46ba-ed8c-40de-856a-a81c3a8f241b",
+    "invoice_number": "INV-9B97E532",
+    "customer_phone": "",
+    "total_amount": 23500.0,
+    "discount": 0.0,
+    "tax": 0.0,
+    "payment_mode": "CASH",
+    "cashier_name": "Admin",
+    "item_details_json": "[{\"product_id\": \"504452eb-c311-4e04-89e5-82160c11e355\", \"product_name\": \"0003 [Bridal Maxcy NKMMM]\", \"price\": 23500.0, \"unit_price\": 23500.0, \"cost_price\": 9200.0, \"quantity\": 1, \"discount_percentage\": 0.0}]",
+    "billing_date": "2026-09-20 13:43:28.075453+00:00",
+    "created_at": "2026-09-20 13:43:28.075453+00:00"
   }
 ]
