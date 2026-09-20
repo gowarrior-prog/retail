@@ -1,31 +1,35 @@
 'use client';
+
 import { useState } from 'react';
 import {
   Receipt,
   ShoppingCart,
   FileText,
-  Users,
-  Printer,
+  RotateCcw,
+  Layers,
   GitFork,
-  UserCheck,
   ChevronRight,
   Delete,
   Plus,
   Minus,
   Trash2,
+  XCircle,
 } from 'lucide-react';
 import { useCartStore, type CartItem } from '@/stores/useCartStore';
 import { posCheckout } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import ThermalReceiptModal from './ThermalReceiptModal';
 import PaymentModal from './PaymentModal';
+import OrderNoteModal from './OrderNoteModal';
+import SplitBillModal from './SplitBillModal';
+import SalesReturnModal from './SalesReturnModal';
+import HoldOrdersModal from './HoldOrdersModal';
 
 export default function LeftRegisterPanel() {
   const {
     items,
     subtotal,
     discountTotal,
-    taxTotal,
     grandTotal,
     changeDue,
     tenderedAmount,
@@ -35,7 +39,10 @@ export default function LeftRegisterPanel() {
     paymentMode,
     customerName,
     customerPhone,
+    orderNote,
     clearCart,
+    holdCurrentOrder,
+    heldBills,
     cashierName,
   } = useCartStore();
 
@@ -44,7 +51,14 @@ export default function LeftRegisterPanel() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutSuccess, setCheckoutSuccess] = useState<any>(null);
   const [keypadBuffer, setKeypadBuffer] = useState<string>('');
+
+  // Modals
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [showReturnModal, setShowReturnModal] = useState(false);
+  const [showHoldModal, setShowHoldModal] = useState(false);
+  const [splitConfig, setSplitConfig] = useState<{ cashPart: number; digitalPart: number; digitalMode: string } | undefined>(undefined);
 
   // Keypad press handler
   const handleKeypadPress = (val: string) => {
@@ -70,7 +84,6 @@ export default function LeftRegisterPanel() {
     } else if (val === '+/-') {
       newBuffer = newBuffer.startsWith('-') ? newBuffer.slice(1) : '-' + newBuffer;
     } else {
-      // Prevent multiple dots
       if (val === '.' && newBuffer.includes('.')) return;
       newBuffer = newBuffer + val;
     }
@@ -89,46 +102,26 @@ export default function LeftRegisterPanel() {
     }
   };
 
-  // Reset buffer when selected item changes
   const handleSelectItem = (id: string) => {
     setSelectedItemId(id);
     setKeypadBuffer('');
   };
 
-  const handlePaymentCheckout = async () => {
-    if (items.length === 0) {
-      alert('Cart is empty! Select items from the catalog first.');
-      return;
+  const handleHoldOrderClick = () => {
+    if (items.length > 0) {
+      const held = holdCurrentOrder();
+      if (held) {
+        alert('Order parked / held successfully! You can resume it anytime from Held Orders.');
+      }
+    } else {
+      setShowHoldModal(true);
     }
+  };
 
-    setIsProcessing(true);
-
-    try {
-      const payload = {
-        store_id: 'store-1',
-        cashier_name: cashierName || 'Cashier',
-        customer_phone: customerPhone || null,
-        customer_name: customerName || 'Walk-in Customer',
-        payment_mode: paymentMode || 'CASH',
-        amount_paid: parseFloat(tenderedAmount) || grandTotal(),
-        amount_tendered: parseFloat(tenderedAmount) || grandTotal(),
-        items: items.map((item: CartItem) => ({
-          product_id: item.id,
-          product_name: item.name,
-          price: item.price,
-          unit_price: item.price,
-          cost_price: item.cost_price || 0,
-          quantity: item.quantity,
-          discount_percentage: item.discount,
-        })),
-      };
-
-      const result = await posCheckout(payload);
-      setCheckoutSuccess(result);
-      setIsProcessing(false);
-    } catch (err: any) {
-      setIsProcessing(false);
-      alert(`Checkout Error: ${err.message || 'Failed to complete transaction'}`);
+  const handleClearCartClick = () => {
+    if (items.length === 0) return;
+    if (confirm('Cancel this entire order and clear the cart?')) {
+      clearCart();
     }
   };
 
@@ -140,9 +133,9 @@ export default function LeftRegisterPanel() {
   const activeGrandTotal = grandTotal();
 
   // Common keypad button style
-  const numBtnClass = "bg-white hover:bg-slate-200 active:bg-slate-300 rounded-lg border border-slate-200 text-sm sm:text-base font-bold flex items-center justify-center cursor-pointer transition-colors select-none aspect-square sm:aspect-auto sm:h-10";
+  const numBtnClass = "bg-white hover:bg-slate-200 active:bg-slate-300 rounded-lg border border-slate-200 text-sm sm:text-base font-bold flex items-center justify-center cursor-pointer transition-colors select-none aspect-square sm:aspect-auto sm:h-9";
   const modeBtnClass = (mode: string) =>
-    `rounded-lg font-bold text-[10px] sm:text-xs tracking-wider border flex items-center justify-center cursor-pointer transition-colors select-none aspect-square sm:aspect-auto sm:h-10 ${
+    `rounded-lg font-bold text-[10px] sm:text-xs tracking-wider border flex items-center justify-center cursor-pointer transition-colors select-none aspect-square sm:aspect-auto sm:h-9 ${
       activeMode === mode
         ? 'bg-emerald-600 text-white border-emerald-700'
         : 'bg-slate-200 text-slate-800 border-slate-300 hover:bg-slate-300'
@@ -150,17 +143,30 @@ export default function LeftRegisterPanel() {
 
   return (
     <section className="w-full lg:w-[380px] xl:w-[420px] bg-white border-r border-slate-200 flex flex-col shrink-0 h-full shadow-sm z-10 overflow-hidden">
-      {/* Cart Items */}
+      {/* Top Section: Order Header & Cart Items List */}
       <div className="flex-1 overflow-y-auto flex flex-col p-2.5 sm:p-3 divide-y divide-slate-100 min-h-0">
         {/* Order Header */}
         <div className="flex items-center justify-between pb-2 text-xs text-slate-500 font-medium shrink-0">
-          <span className="flex items-center gap-1.5 font-mono text-[11px]">
+          <div className="flex items-center gap-1.5 font-mono text-[11px]">
             <Receipt className="w-3.5 h-3.5 text-slate-400" />
-            Order #ORD-2026-0924
-          </span>
-          <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[10.5px] font-semibold">
-            In Progress
-          </span>
+            <span className="font-bold text-slate-800">Active Register</span>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {items.length > 0 && (
+              <button
+                onClick={handleClearCartClick}
+                className="px-2 py-0.5 rounded text-[10.5px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer flex items-center gap-1"
+                title="Cancel Order & Empty Cart"
+              >
+                <XCircle className="w-3 h-3" />
+                <span>Cancel</span>
+              </button>
+            )}
+            <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[10.5px] font-semibold">
+              Ready
+            </span>
+          </div>
         </div>
 
         {/* Active Cart Items */}
@@ -170,9 +176,9 @@ export default function LeftRegisterPanel() {
               <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-slate-100 flex items-center justify-center mb-2">
                 <ShoppingCart className="w-6 h-6 sm:w-7 sm:h-7 text-slate-300" />
               </div>
-              <p className="text-sm font-semibold text-slate-600">This order is empty</p>
+              <p className="text-sm font-semibold text-slate-600">Cart is empty</p>
               <p className="text-xs text-slate-400 mt-0.5 max-w-xs">
-                Select items from the catalog or scan a barcode
+                Scan barcode or select items from catalog
               </p>
             </div>
           ) : (
@@ -193,6 +199,7 @@ export default function LeftRegisterPanel() {
                     <h4 className="text-xs font-bold text-slate-900 truncate leading-tight">{item.name}</h4>
                     <p className="text-[10.5px] text-slate-500 mt-0.5 font-mono">
                       {item.quantity} × <span className="font-semibold text-slate-700">{formatCurrency(item.price)}</span>
+                      {item.discount > 0 && <span className="text-emerald-700 ml-1">({item.discount}% off)</span>}
                     </p>
                   </div>
 
@@ -203,7 +210,7 @@ export default function LeftRegisterPanel() {
                           e.stopPropagation();
                           updateQuantity(item.id, item.quantity - 1);
                         }}
-                        className="w-5 h-5 flex items-center justify-center text-slate-600 hover:bg-white rounded font-bold"
+                        className="w-5 h-5 flex items-center justify-center text-slate-600 hover:bg-white rounded font-bold cursor-pointer"
                       >
                         <Minus className="w-2.5 h-2.5" />
                       </button>
@@ -213,7 +220,7 @@ export default function LeftRegisterPanel() {
                           e.stopPropagation();
                           updateQuantity(item.id, item.quantity + 1);
                         }}
-                        className="w-5 h-5 flex items-center justify-center text-slate-600 hover:bg-white rounded font-bold"
+                        className="w-5 h-5 flex items-center justify-center text-slate-600 hover:bg-white rounded font-bold cursor-pointer"
                       >
                         <Plus className="w-2.5 h-2.5" />
                       </button>
@@ -228,7 +235,8 @@ export default function LeftRegisterPanel() {
                         e.stopPropagation();
                         removeItem(item.id);
                       }}
-                      className="p-1 text-slate-300 hover:text-rose-600 rounded transition-colors"
+                      className="p-1 text-slate-300 hover:text-rose-600 rounded transition-colors cursor-pointer"
+                      title="Remove item"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -240,54 +248,98 @@ export default function LeftRegisterPanel() {
         </div>
       </div>
 
-      {/* Financial Totals */}
+      {/* Note indicator if set */}
+      {orderNote && (
+        <div className="px-3 py-1 bg-amber-50 border-t border-amber-200 flex items-center justify-between text-[11px] text-amber-900 shrink-0">
+          <span className="truncate italic">
+            <span className="font-bold">Note:</span> {orderNote}
+          </span>
+          <button
+            onClick={() => setShowNoteModal(true)}
+            className="text-[10px] font-bold text-amber-700 underline cursor-pointer shrink-0 ml-1"
+          >
+            Edit
+          </button>
+        </div>
+      )}
+
+      {/* Financial Totals - 100% Tax Free! */}
       <div className="px-3 py-2 bg-slate-50 border-t border-b border-slate-200 shrink-0 text-xs">
         <div className="flex justify-between py-0.5 text-slate-500">
           <span>Subtotal</span>
           <span className="font-medium text-slate-700 font-mono">Rs. {subtotal().toLocaleString()}</span>
         </div>
-        <div className="flex justify-between py-0.5 text-slate-500">
-          <span>Taxes</span>
-          <span className="font-medium text-slate-700 font-mono">Rs. {taxTotal().toLocaleString()}</span>
-        </div>
+        {discountTotal() > 0 && (
+          <div className="flex justify-between py-0.5 text-emerald-600">
+            <span>Discount</span>
+            <span className="font-medium font-mono">-Rs. {discountTotal().toLocaleString()}</span>
+          </div>
+        )}
         <div className="flex justify-between pt-1 border-t border-slate-200 text-sm font-bold text-slate-900 mt-0.5">
-          <span>Total</span>
+          <span>Total Payable</span>
           <span className="text-base text-emerald-700 font-mono font-black">
             Rs. {activeGrandTotal.toLocaleString()}
           </span>
         </div>
       </div>
 
-      {/* Action Buttons Row */}
+      {/* 4 Functional Action Buttons Row */}
       <div className="grid grid-cols-4 gap-1 p-1.5 bg-slate-100 border-b border-slate-200 shrink-0">
-        <button className="flex items-center justify-center gap-1 py-1.5 px-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 transition shadow-2xs cursor-pointer text-[11px] font-semibold">
+        {/* Note Button */}
+        <button
+          onClick={() => setShowNoteModal(true)}
+          className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded border transition shadow-2xs cursor-pointer text-[11px] font-semibold ${
+            orderNote
+              ? 'bg-amber-100 text-amber-900 border-amber-300'
+              : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+          }`}
+          title="Add Order Note / Remarks"
+        >
           <FileText className="w-3.5 h-3.5 text-slate-500" />
-          <span className="hidden sm:inline">Note</span>
+          <span>Note</span>
         </button>
-        <button className="flex items-center justify-center gap-1 py-1.5 px-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 transition shadow-2xs cursor-pointer text-[11px] font-semibold">
-          <Users className="w-3.5 h-3.5 text-slate-500" />
-          <span className="hidden sm:inline">Guest</span>
-        </button>
-        <button className="flex items-center justify-center gap-1 py-1.5 px-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 transition shadow-2xs cursor-pointer text-[11px] font-semibold">
-          <Printer className="w-3.5 h-3.5 text-slate-500" />
-          <span className="hidden sm:inline">Bill</span>
-        </button>
-        <button className="flex items-center justify-center gap-1 py-1.5 px-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 transition shadow-2xs cursor-pointer text-[11px] font-semibold">
-          <GitFork className="w-3.5 h-3.5 text-slate-500" />
-          <span className="hidden sm:inline">Split</span>
-        </button>
-      </div>
 
-      {/* Customer Selector Row */}
-      <div className="px-3 py-1.5 bg-white flex items-center justify-between border-b border-slate-200 shrink-0">
-        <button className="flex items-center gap-2 text-xs font-semibold text-slate-700 hover:text-emerald-700 py-0.5 px-1 rounded hover:bg-slate-100 transition w-full text-left cursor-pointer">
-          <UserCheck className="w-4 h-4 text-emerald-600" />
-          <div className="flex-1 truncate">
-            <span className="text-slate-400 font-normal">Customer:</span>
-            <span className="text-slate-900 ml-1 font-bold">
-              {customerName || 'Walk-In Customer'}
-            </span>
-          </div>
+        {/* Sales Return / Refund Button */}
+        <button
+          onClick={() => setShowReturnModal(true)}
+          className="flex items-center justify-center gap-1 py-1.5 px-1 rounded bg-white border border-slate-200 hover:bg-rose-50 hover:text-rose-700 text-slate-700 transition shadow-2xs cursor-pointer text-[11px] font-semibold"
+          title="Sales Return & Bill Refund"
+        >
+          <RotateCcw className="w-3.5 h-3.5 text-rose-600" />
+          <span>Return</span>
+        </button>
+
+        {/* Hold / Bill Park Button */}
+        <button
+          onClick={handleHoldOrderClick}
+          className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded border transition shadow-2xs cursor-pointer text-[11px] font-semibold ${
+            heldBills.length > 0
+              ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
+              : 'bg-white border-slate-200 hover:bg-slate-50 text-slate-700'
+          }`}
+          title={items.length > 0 ? 'Hold / Park Current Cart' : 'View Parked Bills'}
+        >
+          <Layers className="w-3.5 h-3.5 text-indigo-600" />
+          <span>
+            {items.length > 0 ? 'Hold' : 'Bills'}
+            {heldBills.length > 0 ? ` (${heldBills.length})` : ''}
+          </span>
+        </button>
+
+        {/* Split Bill Button */}
+        <button
+          onClick={() => {
+            if (items.length === 0) {
+              alert('Cart is empty! Add items first to split bill.');
+              return;
+            }
+            setShowSplitModal(true);
+          }}
+          className="flex items-center justify-center gap-1 py-1.5 px-1 rounded bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 transition shadow-2xs cursor-pointer text-[11px] font-semibold"
+          title="Split Bill (Cash + Card/Jazz)"
+        >
+          <GitFork className="w-3.5 h-3.5 text-slate-500" />
+          <span>Split</span>
         </button>
       </div>
 
@@ -301,22 +353,23 @@ export default function LeftRegisterPanel() {
                 alert('Cart is empty! Select items from the catalog first.');
                 return;
               }
+              setSplitConfig(undefined);
               setShowPaymentModal(true);
             }}
             disabled={isProcessing || items.length === 0}
             className="flex-1 w-full bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-bold rounded-xl shadow-md border border-emerald-700 flex flex-col items-center justify-center px-3 sm:px-4 py-2 transition group cursor-pointer disabled:opacity-50"
           >
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 flex items-center justify-center mb-1 group-hover:scale-105 transition transform">
-              <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 text-white stroke-[3]" />
+            <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-full bg-white/20 flex items-center justify-center mb-0.5 group-hover:scale-105 transition transform">
+              <ChevronRight className="w-5 h-5 text-white stroke-[3]" />
             </div>
-            <span className="text-[11px] sm:text-sm tracking-wide uppercase font-extrabold">Payment</span>
-            <span className="text-[9px] sm:text-[10.5px] font-medium text-emerald-100 mt-0.5 font-mono">
+            <span className="text-[11px] sm:text-xs tracking-wide uppercase font-extrabold">Payment</span>
+            <span className="text-[9px] sm:text-[10px] font-medium text-emerald-100 font-mono">
               Rs. {activeGrandTotal.toLocaleString()}
             </span>
           </button>
         </div>
 
-        {/* 4x4 Keypad Grid - responsive */}
+        {/* 4x4 Keypad Grid */}
         <div className="flex-1 grid grid-cols-4 gap-1 font-bold text-slate-700 min-w-0">
           <button onClick={() => handleKeypadPress('1')} className={numBtnClass}>1</button>
           <button onClick={() => handleKeypadPress('2')} className={numBtnClass}>2</button>
@@ -336,7 +389,7 @@ export default function LeftRegisterPanel() {
           <button onClick={() => handleKeypadPress('+/-')} className={numBtnClass}>+/-</button>
           <button onClick={() => handleKeypadPress('0')} className={numBtnClass}>0</button>
           <button onClick={() => handleKeypadPress('.')} className={numBtnClass}>.</button>
-          <button onClick={() => handleKeypadPress('DELETE')} className="bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 rounded-lg border border-rose-200 flex items-center justify-center cursor-pointer transition-colors select-none aspect-square sm:aspect-auto sm:h-10" title="Backspace">
+          <button onClick={() => handleKeypadPress('DELETE')} className="bg-rose-50 hover:bg-rose-100 active:bg-rose-200 text-rose-700 rounded-lg border border-rose-200 flex items-center justify-center cursor-pointer transition-colors select-none aspect-square sm:aspect-auto sm:h-9" title="Backspace">
             <Delete className="w-4 h-4" />
           </button>
         </div>
@@ -344,7 +397,39 @@ export default function LeftRegisterPanel() {
 
       {/* Payment Drawer Modal */}
       {showPaymentModal && (
-        <PaymentModal onClose={() => setShowPaymentModal(false)} />
+        <PaymentModal
+          splitConfig={splitConfig}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSplitConfig(undefined);
+          }}
+        />
+      )}
+
+      {/* Order Note Modal */}
+      {showNoteModal && (
+        <OrderNoteModal onClose={() => setShowNoteModal(false)} />
+      )}
+
+      {/* Split Bill Modal */}
+      {showSplitModal && (
+        <SplitBillModal
+          onClose={() => setShowSplitModal(false)}
+          onProceedToSplitCheckout={(cfg) => {
+            setSplitConfig(cfg);
+            setShowPaymentModal(true);
+          }}
+        />
+      )}
+
+      {/* Sales Return & Refund Modal */}
+      {showReturnModal && (
+        <SalesReturnModal onClose={() => setShowReturnModal(false)} />
+      )}
+
+      {/* Parked / Held Orders Modal */}
+      {showHoldModal && (
+        <HoldOrdersModal onClose={() => setShowHoldModal(false)} />
       )}
 
       {/* Direct Thermal Receipt Modal */}
@@ -353,15 +438,16 @@ export default function LeftRegisterPanel() {
           receiptData={{
             invoice_number: checkoutSuccess.invoice_number || 'INV-001',
             items: items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price })),
-            subtotal: checkoutSuccess.subtotal || grandTotal(),
-            discount_total: checkoutSuccess.discount_total || 0,
-            tax_total: checkoutSuccess.tax_total || 0,
-            grand_total: checkoutSuccess.grand_total || grandTotal(),
-            cash_paid: parseFloat(tenderedAmount) || grandTotal(),
+            subtotal: activeGrandTotal,
+            discount_total: discountTotal(),
+            tax_total: 0,
+            grand_total: activeGrandTotal,
+            cash_paid: parseFloat(tenderedAmount) || activeGrandTotal,
             cash_change: checkoutSuccess.change_returned || changeDue(),
             payment_mode: paymentMode || 'CASH',
             customer_name: customerName,
             customer_phone: customerPhone,
+            cashier_name: cashierName,
           }}
           onClose={handleFinishTransaction}
         />

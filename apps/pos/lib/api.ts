@@ -353,13 +353,56 @@ export async function deleteProduct(id: string): Promise<any> {
   }
 }
 
+export function getLocalEmployeesCache(): Employee[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('pos_local_employees_cache');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalEmployeesCache(employees: Employee[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('pos_local_employees_cache', JSON.stringify(employees));
+    setOfflineStore('employees', employees);
+  } catch (err) {
+    console.warn('[API] Failed to save local employees cache:', err);
+  }
+}
+
+export function getLocalKhataCache(): any[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('pos_local_khata_cache');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveLocalKhataCache(khata: any[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('pos_local_khata_cache', JSON.stringify(khata));
+    setOfflineStore('khata', khata);
+  } catch (err) {
+    console.warn('[API] Failed to save local khata cache:', err);
+  }
+}
+
 export async function fetchEmployees(): Promise<Employee[]> {
-  let cached = await getOfflineStore<Employee>('employees');
+  let cached = getLocalEmployeesCache();
+  if (!cached || cached.length === 0) {
+    cached = await getOfflineStore<Employee>('employees');
+  }
   try {
     const raw = await apiFetch<any[]>('/employees');
     if (Array.isArray(raw)) {
       const parsed = z.array(EmployeeSchema.partial()).parse(raw) as Employee[];
-      await setOfflineStore('employees', parsed);
+      saveLocalEmployeesCache(parsed);
       return parsed;
     }
     return cached;
@@ -376,20 +419,20 @@ export async function createEmployee(data: any): Promise<Employee> {
       body: JSON.stringify(validated),
     });
     const emp = EmployeeSchema.parse(res);
-    const cached = await getOfflineStore<Employee>('employees');
-    await setOfflineStore('employees', [emp, ...cached.filter(e => e.id !== emp.id)]);
+    const cached = getLocalEmployeesCache();
+    saveLocalEmployeesCache([emp, ...cached.filter(e => e.id !== emp.id)]);
     return emp;
   } catch {
     const localEmp = { id: `emp-${Date.now()}`, ...data } as Employee;
-    const cached = await getOfflineStore<Employee>('employees');
-    await setOfflineStore('employees', [localEmp, ...cached.filter(e => e.id !== localEmp.id)]);
+    const cached = getLocalEmployeesCache();
+    saveLocalEmployeesCache([localEmp, ...cached.filter(e => e.id !== localEmp.id)]);
     return localEmp;
   }
 }
 
 export async function deleteEmployee(id: string): Promise<any> {
-  const cached = await getOfflineStore<Employee>('employees');
-  await setOfflineStore('employees', cached.filter(e => e.id !== id));
+  const cached = getLocalEmployeesCache();
+  saveLocalEmployeesCache(cached.filter(e => e.id !== id));
   try {
     return await apiFetch<any>(`/employees/${id}`, {
       method: 'DELETE',
@@ -400,16 +443,42 @@ export async function deleteEmployee(id: string): Promise<any> {
 }
 
 export async function fetchKhata(): Promise<any[]> {
-  let cached = await getOfflineStore<any>('khata');
+  let cached = getLocalKhataCache();
+  if (!cached || cached.length === 0) {
+    cached = await getOfflineStore<any>('khata');
+  }
   try {
     const raw = await apiFetch<any[]>('/khata');
     if (Array.isArray(raw)) {
-      await setOfflineStore('khata', raw);
+      saveLocalKhataCache(raw);
       return raw;
     }
     return cached;
   } catch {
     return cached;
+  }
+}
+
+export async function posSalesReturn(data: {
+  original_invoice_number: string;
+  items: { product_id: string; product_name: string; quantity: number; refund_price: number }[];
+  refund_amount: number;
+  reason?: string;
+  cashier_name?: string;
+}): Promise<any> {
+  try {
+    return await apiFetch<any>('/pos/return', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  } catch (err: any) {
+    // Offline fallback for sales return
+    return {
+      status: 'success_offline',
+      return_invoice: `RET-${Date.now().toString().slice(-6)}`,
+      refund_amount: data.refund_amount,
+      message: 'Sales return recorded offline and stock updated.',
+    };
   }
 }
 

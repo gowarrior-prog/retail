@@ -299,6 +299,18 @@ def delete_local_product(product_id: str):
     conn.commit()
     conn.close()
 
+def restock_local_product_stock(product_id: str, quantity: int):
+    """Increments stock for a returned product in local SQLite database."""
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE local_products 
+        SET stock = stock + ?, updated_at = ? 
+        WHERE id = ? OR barcode = ? OR sku = ?
+    """, (quantity, datetime.now().isoformat(), product_id, product_id, product_id))
+    conn.commit()
+    conn.close()
+
 
 # ── Employee SQLite CRUD ──────────────────────────────────────
 

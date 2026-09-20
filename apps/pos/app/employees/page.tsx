@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, RefreshCw, X, User, Trash2, UserCheck, Shield } from 'lucide-react';
-import { fetchEmployees, createEmployee, deleteEmployee, syncOdooEmployees } from '@/lib/api';
+import { fetchEmployees, createEmployee, deleteEmployee, syncOdooEmployees, getLocalEmployeesCache } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [employees, setEmployees] = useState<any[]>(() => getLocalEmployeesCache());
+  const [isLoading, setIsLoading] = useState<boolean>(() => getLocalEmployeesCache().length === 0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
 
@@ -19,7 +19,6 @@ export default function EmployeesPage() {
   });
 
   const loadData = async () => {
-    setIsLoading(true);
     try {
       const data = await fetchEmployees();
       setEmployees(data || []);

@@ -143,10 +143,7 @@ export default function ThermalReceiptModal({ receiptData, onClose }: ThermalRec
             <span>${(receiptData.cash_change || 0).toLocaleString('en-PK', { minimumFractionDigits: 2 })} Rs.</span>
           </div>
 
-          <div style="font-size: 11px; margin-top: 6px;">
-            <div class="sub-line"><span>Tax 0.00%</span><span>0.00</span></div>
-            <div class="sub-line"><span>Total Taxes</span><span>0.00 Rs.</span></div>
-          </div>
+
 
           <div class="footer text-center">
             <div style="font-size: 12px; font-weight: bold; margin-bottom: 6px;">Thanks For Shoping :)</div>
@@ -303,12 +300,6 @@ export default function ThermalReceiptModal({ receiptData, onClose }: ThermalRec
                 <span>-{formatCurrency(receiptData.discount_total)}</span>
               </div>
             )}
-            {receiptData.tax_total > 0 && (
-              <div className="flex justify-between text-slate-600">
-                <span>Tax:</span>
-                <span>+{formatCurrency(receiptData.tax_total)}</span>
-              </div>
-            )}
             <div className="flex justify-between font-extrabold text-base text-slate-900 pt-1.5 border-t border-slate-900">
               <span>TOTAL:</span>
               <span>{formatCurrency(receiptData.grand_total)}</span>
@@ -337,19 +328,18 @@ export default function ThermalReceiptModal({ receiptData, onClose }: ThermalRec
         {/* Modal Bottom Actions */}
         <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2 print:hidden">
           <button
-            onClick={handleWhatsAppShare}
-            className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+            onClick={onClose}
+            className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-xs border border-slate-300 transition-colors cursor-pointer"
           >
-            <Share2 className="w-3.5 h-3.5" />
-            <span>WhatsApp</span>
+            Close
           </button>
 
           <button
             onClick={handlePrint}
-            className="flex-1 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-sm"
           >
-            <Printer className="w-3.5 h-3.5" />
-            <span>Print Thermal</span>
+            <Printer className="w-4 h-4" />
+            <span>Print Thermal Receipt</span>
           </button>
         </div>
       </div>

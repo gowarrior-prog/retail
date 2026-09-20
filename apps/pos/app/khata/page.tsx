@@ -2,18 +2,17 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { BookOpen, Search, UserCheck, ArrowUpRight, ArrowDownLeft, RefreshCw, X, CreditCard } from 'lucide-react';
-import { fetchKhata, syncOdooKhata } from '@/lib/api';
+import { fetchKhata, syncOdooKhata, getLocalKhataCache } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 
 export default function KhataPage() {
-  const [khataRecords, setKhataRecords] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [khataRecords, setKhataRecords] = useState<any[]>(() => getLocalKhataCache());
+  const [isLoading, setIsLoading] = useState<boolean>(() => getLocalKhataCache().length === 0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
 
   const loadKhata = async () => {
-    setIsLoading(true);
     try {
       const data = await fetchKhata();
       setKhataRecords(data || []);

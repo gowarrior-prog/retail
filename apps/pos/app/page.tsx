@@ -63,7 +63,7 @@ export default function CheckoutPOSPage() {
   }, [products, addItem]);
 
   return (
-    <div className="h-[calc(100vh-3.5rem)] w-full overflow-hidden flex flex-col bg-slate-100 select-none">
+    <div className="h-full w-full overflow-hidden flex flex-col bg-slate-100 select-none">
       {/* Scanned Product Detail Modal */}
       {scannedProduct && (
         <ProductDetailModal

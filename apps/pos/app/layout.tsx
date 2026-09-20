@@ -7,14 +7,14 @@ export const metadata: Metadata = {
   description: 'Apex Retail Point of Sale System for Bilal Cloth House, Narowal',
 };
 
+import MainContentLayout from '@/components/layout/MainContentLayout';
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="light" className="min-h-screen bg-slate-100">
-      <body className="min-h-screen w-full font-sans text-slate-800 antialiased bg-slate-100 overflow-y-auto">
+    <html lang="en" data-theme="light" className="h-full bg-slate-100 overflow-hidden">
+      <body className="h-full w-full font-sans text-slate-800 antialiased bg-slate-100 overflow-hidden">
         <SidebarWrapper />
-        <div className="min-h-screen xl:pl-16 overflow-y-auto p-4 lg:p-6" style={{ paddingTop: '80px' }}>
-          {children}
-        </div>
+        <MainContentLayout>{children}</MainContentLayout>
       </body>
     </html>
   );

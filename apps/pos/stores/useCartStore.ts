@@ -13,11 +13,22 @@ export interface CartItem {
   discount: number; // percentage
 }
 
+export interface HeldBill {
+  id: string;
+  timestamp: string;
+  items: CartItem[];
+  orderNote?: string;
+  customerName?: string;
+  customerPhone?: string;
+  total: number;
+}
+
 interface CartState {
   items: CartItem[];
   taxRate: number;
   globalDiscount: number;
   tenderedAmount: string;
+  orderNote: string;
   giftReceipt: boolean;
   emailCopy: boolean;
   customerName: string;
@@ -25,6 +36,7 @@ interface CartState {
   paymentMode: string;
   cashierName: string;
   storeId: string;
+  heldBills: HeldBill[];
   // Computed
   subtotal: () => number;
   discountTotal: () => number;
@@ -43,6 +55,7 @@ interface CartState {
   setGlobalDiscount: (discount: number) => void;
   setTaxRate: (rate: number) => void;
   setTenderedAmount: (amount: string) => void;
+  setOrderNote: (note: string) => void;
   setGiftReceipt: (v: boolean) => void;
   setEmailCopy: (v: boolean) => void;
   setCustomerName: (name: string) => void;
@@ -50,13 +63,17 @@ interface CartState {
   setPaymentMode: (mode: string) => void;
   setCashierName: (name: string) => void;
   clearCart: () => void;
+  holdCurrentOrder: () => boolean;
+  restoreHeldOrder: (id: string) => void;
+  deleteHeldOrder: (id: string) => void;
 }
 
 export const useCartStore = create<CartState>((set, get) => ({
   items: [],
-  taxRate: 15,
+  taxRate: 0,
   globalDiscount: 0,
   tenderedAmount: '',
+  orderNote: '',
   giftReceipt: false,
   emailCopy: false,
   customerName: '',
@@ -64,6 +81,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   paymentMode: 'CASH',
   cashierName: 'Admin',
   storeId: 'store-1',
+  heldBills: [],
 
   subtotal: () => {
     return get().items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -80,12 +98,13 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   taxTotal: () => {
-    const afterDiscount = get().subtotal() - get().discountTotal();
-    return (afterDiscount * (get().taxRate || 0)) / 100;
+    // Taxes permanently set to 0 as requested
+    return 0;
   },
 
   grandTotal: () => {
-    return Math.max(0, get().subtotal() - get().discountTotal() + get().taxTotal());
+    // Grand Total is purely Subtotal minus Discount. No Taxes!
+    return Math.max(0, get().subtotal() - get().discountTotal());
   },
 
   changeDue: () => {
@@ -148,13 +167,57 @@ export const useCartStore = create<CartState>((set, get) => ({
   })),
 
   setGlobalDiscount: (discount: number) => set({ globalDiscount: Math.max(0, Math.min(100, discount)) }),
-  setTaxRate: (rate: number) => set({ taxRate: Math.max(0, rate) }),
+  setTaxRate: (rate: number) => set({ taxRate: 0 }),
   setTenderedAmount: (amount: string) => set({ tenderedAmount: amount }),
+  setOrderNote: (note: string) => set({ orderNote: note }),
   setGiftReceipt: (v: boolean) => set({ giftReceipt: v }),
   setEmailCopy: (v: boolean) => set({ emailCopy: v }),
   setCustomerName: (name: string) => set({ customerName: name }),
   setCustomerPhone: (phone: string) => set({ customerPhone: phone }),
   setPaymentMode: (mode: string) => set({ paymentMode: mode }),
   setCashierName: (name: string) => set({ cashierName: name }),
-  clearCart: () => set({ items: [], globalDiscount: 0, tenderedAmount: '', customerName: '', customerPhone: '' }),
+  clearCart: () => set({ items: [], globalDiscount: 0, tenderedAmount: '', orderNote: '', customerName: '', customerPhone: '' }),
+
+  holdCurrentOrder: () => {
+    const state = get();
+    if (state.items.length === 0) return false;
+    const newHold: HeldBill = {
+      id: `HOLD-${Date.now().toString().slice(-6)}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      items: [...state.items],
+      orderNote: state.orderNote,
+      customerName: state.customerName,
+      customerPhone: state.customerPhone,
+      total: state.grandTotal(),
+    };
+    set({
+      heldBills: [newHold, ...state.heldBills],
+      items: [],
+      orderNote: '',
+      customerName: '',
+      customerPhone: '',
+      tenderedAmount: '',
+      globalDiscount: 0,
+    });
+    return true;
+  },
+
+  restoreHeldOrder: (id: string) => {
+    const state = get();
+    const target = state.heldBills.find((h) => h.id === id);
+    if (!target) return;
+    set({
+      items: target.items,
+      orderNote: target.orderNote || '',
+      customerName: target.customerName || '',
+      customerPhone: target.customerPhone || '',
+      heldBills: state.heldBills.filter((h) => h.id !== id),
+    });
+  },
+
+  deleteHeldOrder: (id: string) => {
+    set((state: CartState) => ({
+      heldBills: state.heldBills.filter((h) => h.id !== id),
+    }));
+  },
 }));
