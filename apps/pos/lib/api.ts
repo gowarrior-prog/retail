@@ -130,11 +130,17 @@ export async function testServerConnection(targetIp?: string): Promise<{ success
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const method = (options?.method || 'GET').toUpperCase();
   const apiBase = getApiBaseUrl();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
+
   try {
     const res = await fetch(`${apiBase}${path}`, {
       headers: { 'Content-Type': 'application/json', ...options?.headers },
+      signal: controller.signal,
       ...options,
     });
+    clearTimeout(timeoutId);
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       const msg = typeof err.detail === 'string'
@@ -146,8 +152,14 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     }
     return await res.json();
   } catch (err: any) {
+    clearTimeout(timeoutId);
     console.warn(`[API] Network notice for ${path}:`, err.message || err);
-    const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError' || err.message?.includes('fetch failed') || err.message?.includes('network');
+    const isNetworkError =
+      err.name === 'AbortError' ||
+      err.message === 'Failed to fetch' ||
+      err.name === 'TypeError' ||
+      err.message?.includes('fetch failed') ||
+      err.message?.includes('network');
     if (isNetworkError) {
       throw new Error(`Offline Mode: Server (${apiBase}) unreachable.`);
     }

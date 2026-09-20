@@ -121,13 +121,13 @@ export default function PaymentModal({ onClose, splitConfig }: PaymentModalProps
     try {
       const resolvedCustomerName =
         activePaymentMode === 'KHATA'
-          ? (selectedKhataCustomer?.customer_name || customKhataName.trim())
-          : (customerName.trim() || undefined);
+          ? (selectedKhataCustomer?.customer_name || customKhataName.trim() || 'Khata Customer')
+          : (customerName.trim() || 'Customer');
 
       const resolvedCustomerPhone =
         activePaymentMode === 'KHATA'
-          ? (selectedKhataCustomer?.phone || customKhataPhone.trim())
-          : (customerPhone.trim() || undefined);
+          ? (selectedKhataCustomer?.phone || customKhataPhone.trim() || null)
+          : (customerPhone.trim() || null);
 
       let modeSummary = activePaymentMode;
       if (activePaymentMode === 'CARD') {
@@ -143,8 +143,8 @@ export default function PaymentModal({ onClose, splitConfig }: PaymentModalProps
       const payload = {
         store_id: 'store-1',
         cashier_name: cashierName || 'Admin',
-        customer_phone: resolvedCustomerPhone || null,
-        customer_name: resolvedCustomerName || null,
+        customer_phone: resolvedCustomerPhone,
+        customer_name: resolvedCustomerName,
         payment_mode: modeSummary,
         tax_percentage: 0,
         amount_paid: totalPayable,

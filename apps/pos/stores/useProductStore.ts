@@ -1,6 +1,6 @@
 'use client';
 import { create } from 'zustand';
-import { fetchProducts, saveLocalProductCache, type Product } from '@/lib/api';
+import { fetchProducts, saveLocalProductCache, getLocalProductCache, type Product } from '@/lib/api';
 
 interface ProductState {
   products: Product[];
@@ -17,32 +17,39 @@ interface ProductState {
   removeProductFromStore: (id: string) => void;
 }
 
+const getInitialProducts = (): Product[] => {
+  if (typeof window === 'undefined') return [];
+  return getLocalProductCache();
+};
+
+const initialItems = getInitialProducts();
+
 export const useProductStore = create<ProductState>((set, get) => ({
-  products: [],
-  filteredProducts: [],
+  products: initialItems,
+  filteredProducts: initialItems,
   searchQuery: '',
   selectedCategory: 'All',
-  isLoading: false,
+  isLoading: initialItems.length === 0,
   error: null,
 
   loadProducts: async (force = false) => {
     const { products } = get();
-    // Cache-first: If products are already loaded in memory and force refresh is false, keep existing items
-    if (!force && products.length > 0) return;
+    if (products.length === 0) {
+      const cached = getLocalProductCache();
+      if (cached.length > 0) {
+        set({ products: cached, filteredProducts: cached, isLoading: false });
+      }
+    }
 
-    set({ isLoading: true, error: null });
     try {
       const liveProducts = await fetchProducts();
       if (Array.isArray(liveProducts) && liveProducts.length > 0) {
         set({ products: liveProducts, filteredProducts: liveProducts, isLoading: false });
-      } else if (products.length > 0) {
-        // Backend returned empty or failed; retain current non-empty in-memory products
-        set({ isLoading: false });
       } else {
-        set({ products: [], filteredProducts: [], isLoading: false });
+        set({ isLoading: false });
       }
     } catch (err: any) {
-      console.warn('[Store] loadProducts catch error, retaining current products:', err);
+      console.warn('[Store] loadProducts background sync:', err);
       set({ isLoading: false });
     }
   },

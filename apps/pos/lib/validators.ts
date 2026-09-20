@@ -64,13 +64,15 @@ export const POSOrderItemSchema = z.object({
 });
 
 export const POSCheckoutSchema = z.object({
-  store_id: z.string().optional().default('store-1'),
-  cashier_name: z.string().optional().default('Cashier'),
+  store_id: z.string().nullable().optional().default('store-1'),
+  cashier_name: z.string().nullable().optional().default('Cashier'),
   customer_phone: z.string().nullable().optional(),
-  customer_name: z.string().optional().default('Walk-in Customer'),
-  payment_mode: z.enum(['CASH', 'BANK', 'CREDIT_KHATA', 'CARD']).default('CASH'),
+  customer_name: z.string().nullable().optional().default('Customer'),
+  payment_mode: z.string().default('CASH'),
+  tax_percentage: z.number().optional().default(0),
   amount_paid: z.number().nonnegative(),
   amount_tendered: z.number().nonnegative().optional(),
+  order_note: z.string().nullable().optional(),
   items: z.array(POSOrderItemSchema).min(1, 'Cart cannot be empty'),
 });
 
