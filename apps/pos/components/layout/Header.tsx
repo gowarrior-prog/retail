@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, History, RefreshCw, X, Receipt, Layers, Lock, UserCircle2, Wifi, WifiOff } from 'lucide-react';
+import { History, RefreshCw, X, Receipt, Layers, Lock, UserCircle2, Wifi, WifiOff } from 'lucide-react';
 import { useUIStore } from '@/stores/useUIStore';
 import { useProductStore } from '@/stores/useProductStore';
 import { useCartStore } from '@/stores/useCartStore';
@@ -9,7 +9,7 @@ import CashierSelectModal from '@/components/checkout/CashierSelectModal';
 
 export default function Header() {
   const { heldOrdersCount, isSyncing, setSyncing } = useUIStore();
-  const { setSearchQuery, searchQuery, loadProducts } = useProductStore();
+  const { loadProducts } = useProductStore();
   const { cashierName, setCashierName } = useCartStore();
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showCashierModal, setShowCashierModal] = useState(false);
@@ -123,36 +123,8 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Connection Status Badges - Always Visible on All Screen Sizes */}
+          {/* Active Order Badge */}
           <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2 sm:pl-3 text-xs shrink-0">
-            {connectionStatus === 'connected' ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-medium" title="Connected to Local Shop Server (Port 8000)">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <Wifi className="w-3 h-3 text-emerald-600" />
-                <span className="font-bold">Local Server</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-medium" title="Running in 100% Offline SQLite Engine Mode">
-                <WifiOff className="w-3 h-3 text-amber-600" />
-                <span className="font-bold">Offline SQLite</span>
-              </span>
-            )}
-
-            {cloudDbStatus ? (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[11px] font-semibold" title="Supabase Cloud Database Online">
-                <span>☁️ Cloud DB</span>
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 text-[11px] font-medium" title="Cloud Database Disconnected">
-                <span>☁️ Cloud Disconnected</span>
-              </span>
-            )}
-
-            {pendingBillsCount > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-bold animate-bounce">
-                <span>{pendingBillsCount} Pending Sync</span>
-              </span>
-            )}
             <button
               onClick={handleOpenHistory}
               className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition text-[11px] font-semibold cursor-pointer active:scale-95"
@@ -163,33 +135,7 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Central Search Bar */}
-        <div className="flex-1 max-w-md mx-3 hidden sm:block">
-          <div className="relative w-full">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Search className="w-4 h-4" />
-            </div>
-            <input
-              id="product-search-input"
-              className="w-full pl-9 pr-14 py-1.5 bg-slate-50 text-xs text-slate-900 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition shadow-inner font-medium"
-              placeholder="Search items by barcode, SKU or title..."
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            {searchQuery && (
-              <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-slate-400 hover:text-slate-700 p-0.5 rounded hover:bg-slate-200"
-                  title="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+
 
         {/* Right: Cashier & Actions */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
