@@ -5,7 +5,7 @@
  */
 
 const DB_NAME = 'BilalPOS_OfflineDB';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -26,6 +26,12 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains('khata')) {
         db.createObjectStore('khata', { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains('purchases')) {
+        db.createObjectStore('purchases', { keyPath: 'id' });
+      }
+      if (!db.objectStoreNames.contains('billing')) {
+        db.createObjectStore('billing', { keyPath: 'id' });
+      }
     };
 
     request.onsuccess = () => resolve(request.result);
@@ -35,7 +41,7 @@ function openDB(): Promise<IDBDatabase> {
 
 /** Save an array of items to an IndexedDB store */
 export async function setOfflineStore<T extends { id: string }>(
-  storeName: 'products' | 'employees' | 'khata',
+  storeName: 'products' | 'employees' | 'khata' | 'purchases' | 'billing',
   items: T[]
 ): Promise<void> {
   try {
@@ -62,7 +68,7 @@ export async function setOfflineStore<T extends { id: string }>(
 
 /** Get all items from an IndexedDB store */
 export async function getOfflineStore<T>(
-  storeName: 'products' | 'employees' | 'khata'
+  storeName: 'products' | 'employees' | 'khata' | 'purchases' | 'billing'
 ): Promise<T[]> {
   try {
     const db = await openDB();

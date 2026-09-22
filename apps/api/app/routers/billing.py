@@ -40,7 +40,25 @@ async def sync_purchases_from_odoo():
 
 @router.get("/khata")
 async def get_khata_records(db: AsyncSession = Depends(get_db3)):
+    import asyncio
     local_khata = get_all_local_khata()
+    if not local_khata:
+        json_khata = load_local_backup_fallback("khata")
+        if json_khata:
+            for jk in json_khata:
+                try:
+                    save_khata_locally(
+                        cust_id=jk.get("id"),
+                        odoo_id=jk.get("odoo_id"),
+                        name=jk.get("customer_name") or jk.get("name", "Customer"),
+                        phone=jk.get("phone") or jk.get("customer_phone", ""),
+                        email=jk.get("email"),
+                        balance=float(jk.get("total_balance") or jk.get("balance") or 0.0)
+                    )
+                except Exception:
+                    pass
+            local_khata = get_all_local_khata()
+
     local_map = {}
     for lk in local_khata:
         local_map[lk["id"]] = {
@@ -53,7 +71,7 @@ async def get_khata_records(db: AsyncSession = Depends(get_db3)):
 
     if db is not None:
         try:
-            result = await db.execute(select(CustomerKhataModel))
+            result = await asyncio.wait_for(db.execute(select(CustomerKhataModel)), timeout=0.8)
             rows = result.scalars().all()
             if rows:
                 for r in rows:
@@ -70,48 +88,50 @@ async def get_khata_records(db: AsyncSession = Depends(get_db3)):
                         "phone": r.phone,
                         "total_balance": float(r.total_balance or 0.0),
                     }
-        except Exception as e:
-            print(f"DB3 offline ({e}), loading khata from SQLite...")
+        except Exception:
+            pass
 
     return list(local_map.values())
 
 
 @router.get("/purchases")
 async def get_shop_purchases(db: AsyncSession = Depends(get_db3)):
-    try:
-        result = await db.execute(select(ShopPurchaseModel))
-        return result.scalars().all()
-    except Exception as e:
-        print(f"Database error ({e}), reading purchases from local hard drive JSON backup...")
-        return load_local_backup_fallback("purchases")
+    import asyncio
+    if db is not None:
+        try:
+            result = await asyncio.wait_for(db.execute(select(ShopPurchaseModel)), timeout=0.8)
+            return result.scalars().all()
+        except Exception:
+            pass
+    return load_local_backup_fallback("purchases") or []
 
 @router.get("/billing-history")
 async def get_billing_history(db: AsyncSession = Depends(get_db3)):
-    try:
-        result = await db.execute(select(BillingHistoryModel))
-        rows = result.scalars().all()
-        return [
-            {
-                "id": r.id,
-                "invoice_number": r.invoice_number,
-                "customer_phone": r.customer_phone,
-                "total_amount": r.total_amount,
-                "discount": r.discount,
-                "tax": r.tax,
-                "payment_mode": r.payment_mode,
-                "cashier_name": r.cashier_name,
-                "item_details_json": r.item_details_json,
-                "billing_date": r.billing_date.isoformat() if r.billing_date else None,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in rows
-        ]
-    except Exception as e:
-        print(f"Database error ({e}), reading billing history from local hard drive JSON backup...")
-        fallback = load_local_backup_fallback("billing")
-        if fallback:
-            return fallback
-        raise HTTPException(status_code=500, detail=str(e))
+    import asyncio
+    if db is not None:
+        try:
+            result = await asyncio.wait_for(db.execute(select(BillingHistoryModel)), timeout=0.8)
+            rows = result.scalars().all()
+            if rows:
+                return [
+                    {
+                        "id": r.id,
+                        "invoice_number": r.invoice_number,
+                        "customer_phone": r.customer_phone,
+                        "total_amount": r.total_amount,
+                        "discount": r.discount,
+                        "tax": r.tax,
+                        "payment_mode": r.payment_mode,
+                        "cashier_name": r.cashier_name,
+                        "item_details_json": r.item_details_json,
+                        "billing_date": r.billing_date.isoformat() if r.billing_date else None,
+                        "created_at": r.created_at.isoformat() if r.created_at else None,
+                    }
+                    for r in rows
+                ]
+        except Exception:
+            pass
+    return load_local_backup_fallback("billing") or []
 
 
 @router.post("/pos/checkout")

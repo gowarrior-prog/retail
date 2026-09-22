@@ -20,9 +20,9 @@ url_db1 = get_async_url("DB1_DATABASE_URL")
 url_db2 = get_async_url("DB2_DATABASE_URL")
 url_db3 = get_async_url("DB3_DATABASE_URL")
 
-engine_db1 = create_async_engine(url_db1, echo=False, future=True, connect_args={"command_timeout": 3})
-engine_db2 = create_async_engine(url_db2, echo=False, future=True, connect_args={"command_timeout": 3})
-engine_db3 = create_async_engine(url_db3, echo=False, future=True, connect_args={"command_timeout": 3})
+engine_db1 = create_async_engine(url_db1, echo=False, future=True, pool_pre_ping=False, pool_recycle=300, pool_timeout=1.5, connect_args={"timeout": 1.5, "command_timeout": 2})
+engine_db2 = create_async_engine(url_db2, echo=False, future=True, pool_pre_ping=False, pool_recycle=300, pool_timeout=1.5, connect_args={"timeout": 1.5, "command_timeout": 2})
+engine_db3 = create_async_engine(url_db3, echo=False, future=True, pool_pre_ping=False, pool_recycle=300, pool_timeout=1.5, connect_args={"timeout": 1.5, "command_timeout": 2})
 
 # 3 Session Makers
 SessionDb1 = async_sessionmaker(engine_db1, class_=AsyncSession, expire_on_commit=False)

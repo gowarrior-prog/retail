@@ -7,15 +7,36 @@ import { Product } from '@/lib/api';
 import LeftRegisterPanel from '@/components/checkout/LeftRegisterPanel';
 import CategoryNavSlider from '@/components/checkout/CategoryNavSlider';
 import ProductCatalogGrid from '@/components/checkout/ProductCatalogGrid';
-import ProductDetailModal from '@/components/checkout/ProductDetailModal';
 
 export default function CheckoutPOSPage() {
   const { loadProducts, products } = useProductStore();
   const { addItem } = useCartStore();
 
-  const [scannedProduct, setScannedProduct] = useState<Product | null>(null);
+  const [scanToast, setScanToast] = useState<string | null>(null);
   const barcodeBufferRef = useRef<string>('');
   const lastKeyTimeRef = useRef<number>(0);
+  const toastTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Play subtle POS beep on successful scan
+  const playScanBeep = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const audioCtx = new AudioCtx();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1800, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.1);
+    } catch {
+      // Audio autoplay policy fallback
+    }
+  };
 
   useEffect(() => {
     loadProducts();
@@ -49,7 +70,14 @@ export default function CheckoutPOSPage() {
 
           if (match) {
             addItem(match);
-            setScannedProduct(match);
+            playScanBeep();
+
+            // Show brief non-intrusive notification banner (not a blocking popup modal)
+            setScanToast(`✓ Added: ${match.name}`);
+            if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+            toastTimeoutRef.current = setTimeout(() => {
+              setScanToast(null);
+            }, 2000);
           }
           barcodeBufferRef.current = '';
         }
@@ -63,13 +91,13 @@ export default function CheckoutPOSPage() {
   }, [products, addItem]);
 
   return (
-    <div className="h-full w-full overflow-hidden flex flex-col bg-slate-100 select-none">
-      {/* Scanned Product Detail Modal */}
-      {scannedProduct && (
-        <ProductDetailModal
-          product={scannedProduct}
-          onClose={() => setScannedProduct(null)}
-        />
+    <div className="h-full w-full overflow-hidden flex flex-col bg-slate-100 select-none relative">
+      {/* Non-intrusive Quick Scan Toast (auto disappears in 2s, does NOT block screen) */}
+      {scanToast && (
+        <div className="fixed top-4 right-4 z-50 bg-emerald-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg border border-emerald-500/30 flex items-center gap-2 animate-bounce">
+          <span className="w-2 h-2 rounded-full bg-white animate-ping"></span>
+          <span>{scanToast}</span>
+        </div>
       )}
 
       {/* Main Register Workspace */}

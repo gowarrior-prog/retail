@@ -24,7 +24,26 @@ async def sync_employees_from_odoo():
 
 @router.get("/employees")
 async def get_employees(db: AsyncSession = Depends(get_db2)):
+    import asyncio
     local_emps = get_all_local_employees()
+    if not local_emps:
+        json_emps = load_local_backup_fallback("employees")
+        if json_emps:
+            for je in json_emps:
+                try:
+                    save_employee_locally(
+                        emp_id=je.get("id"),
+                        odoo_id=je.get("odoo_id"),
+                        name=je.get("name", "Staff"),
+                        job_title=je.get("role") or je.get("job_title"),
+                        department=je.get("department"),
+                        phone=je.get("phone"),
+                        email=je.get("email")
+                    )
+                except Exception:
+                    pass
+            local_emps = get_all_local_employees()
+
     local_map = {}
     for le in local_emps:
         local_map[le["id"]] = {
@@ -42,7 +61,7 @@ async def get_employees(db: AsyncSession = Depends(get_db2)):
 
     if db is not None:
         try:
-            result = await db.execute(select(EmployeeModel))
+            result = await asyncio.wait_for(db.execute(select(EmployeeModel)), timeout=0.8)
             rows = result.scalars().all()
             if rows:
                 for r in rows:
@@ -69,7 +88,7 @@ async def get_employees(db: AsyncSession = Depends(get_db2)):
                         "created_at": r.created_at.isoformat() if r.created_at else None,
                     }
         except Exception as e:
-            print(f"DB2 offline ({e}), loading employees from SQLite...")
+            pass
 
     return list(local_map.values())
 

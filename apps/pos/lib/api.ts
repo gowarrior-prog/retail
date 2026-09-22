@@ -494,21 +494,78 @@ export async function posSalesReturn(data: {
   }
 }
 
-export async function fetchPurchases(): Promise<any[]> {
+export function getLocalPurchasesCache(): any[] {
+  if (typeof window === 'undefined') return [];
   try {
-    return await apiFetch<any[]>('/purchases');
+    const raw = localStorage.getItem('pos_local_purchases_cache');
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
   }
 }
 
-export async function fetchBillingHistory(): Promise<BillingRecord[]> {
+export function saveLocalPurchasesCache(purchases: any[]): void {
+  if (typeof window === 'undefined') return;
   try {
-    const raw = await apiFetch<any[]>('/billing-history');
-    if (!Array.isArray(raw)) return [];
-    return z.array(BillingRecordSchema.partial()).parse(raw) as BillingRecord[];
+    localStorage.setItem('pos_local_purchases_cache', JSON.stringify(purchases));
+    setOfflineStore('purchases', purchases);
+  } catch (err) {
+    console.warn('[API] Failed to save local purchases cache:', err);
+  }
+}
+
+export function getLocalBillingCache(): BillingRecord[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem('pos_local_billing_cache');
+    return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
+  }
+}
+
+export function saveLocalBillingCache(billing: BillingRecord[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('pos_local_billing_cache', JSON.stringify(billing));
+    setOfflineStore('billing', billing);
+  } catch (err) {
+    console.warn('[API] Failed to save local billing cache:', err);
+  }
+}
+
+export async function fetchPurchases(): Promise<any[]> {
+  let cached = getLocalPurchasesCache();
+  if (!cached || cached.length === 0) {
+    cached = await getOfflineStore<any>('purchases');
+  }
+  try {
+    const raw = await apiFetch<any[]>('/purchases');
+    if (Array.isArray(raw)) {
+      saveLocalPurchasesCache(raw);
+      return raw;
+    }
+    return cached;
+  } catch {
+    return cached;
+  }
+}
+
+export async function fetchBillingHistory(): Promise<BillingRecord[]> {
+  let cached = getLocalBillingCache();
+  if (!cached || cached.length === 0) {
+    cached = await getOfflineStore<BillingRecord>('billing');
+  }
+  try {
+    const raw = await apiFetch<any[]>('/billing-history');
+    if (Array.isArray(raw)) {
+      const parsed = z.array(BillingRecordSchema.partial()).parse(raw) as BillingRecord[];
+      saveLocalBillingCache(parsed);
+      return parsed;
+    }
+    return cached;
+  } catch {
+    return cached;
   }
 }
 

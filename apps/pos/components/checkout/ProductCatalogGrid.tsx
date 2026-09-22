@@ -1,4 +1,5 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { Sparkles, Layers, Feather, Tag, Scissors, Sun, BadgePercent, Palette, Gem, Box, Shirt, Plus } from 'lucide-react';
 import { useProductStore } from '@/stores/useProductStore';
 import { useCartStore } from '@/stores/useCartStore';
@@ -6,9 +7,14 @@ import { useCartStore } from '@/stores/useCartStore';
 export default function ProductCatalogGrid() {
   const { filteredProducts, selectedCategory, searchQuery } = useProductStore();
   const { addItem } = useCartStore();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Filter & Slice items to top 48 for 60fps ultra-fast performance on low-end hardware
-  const matchingItems = filteredProducts ? filteredProducts.filter((p: any) => {
+  const matchingItems = (mounted && filteredProducts) ? filteredProducts.filter((p: any) => {
     const matchesCategory =
       !selectedCategory ||
       selectedCategory === 'All' ||

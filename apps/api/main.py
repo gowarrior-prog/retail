@@ -45,26 +45,32 @@ async def periodic_odoo_auto_sync():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Isolated schema creation per database with fail-safe try-except
+    # Fast non-blocking schema check per database (max 0.8s timeout)
     try:
-        async with engine_db1.begin() as conn:
-            await conn.run_sync(Base1.metadata.create_all)
+        async def init_db1():
+            async with engine_db1.begin() as conn:
+                await conn.run_sync(Base1.metadata.create_all)
+        await asyncio.wait_for(init_db1(), timeout=0.8)
     except Exception as e:
-        print(f"Notice: Could not connect to DB1 on startup ({e}). Running in offline SQLite mode.")
+        print(f"Notice: DB1 running in local SQLite mode.")
 
     try:
-        async with engine_db2.begin() as conn:
-            await conn.run_sync(Base2.metadata.create_all)
+        async def init_db2():
+            async with engine_db2.begin() as conn:
+                await conn.run_sync(Base2.metadata.create_all)
+        await asyncio.wait_for(init_db2(), timeout=0.8)
     except Exception as e:
-        print(f"Notice: Could not connect to DB2 on startup ({e}). Running in offline SQLite mode.")
+        print(f"Notice: DB2 running in local SQLite mode.")
 
     try:
-        async with engine_db3.begin() as conn:
-            await conn.run_sync(Base3.metadata.create_all)
+        async def init_db3():
+            async with engine_db3.begin() as conn:
+                await conn.run_sync(Base3.metadata.create_all)
+        await asyncio.wait_for(init_db3(), timeout=0.8)
     except Exception as e:
-        print(f"Notice: Could not connect to DB3 on startup ({e}). Running in offline SQLite mode.")
+        print(f"Notice: DB3 running in local SQLite mode.")
     
-    # Run initial hard drive backup on startup
+    # Run initial hard drive backup on startup in background
     try:
         asyncio.create_task(backup_all_data_to_hard_drive())
     except Exception:
@@ -125,29 +131,61 @@ from sqlalchemy import text
 
 @app.get("/system-status")
 async def get_system_status():
-    """Diagnostic status for POS UI: checks local server and Supabase Cloud DB connectivity."""
+    """Diagnostic status for POS UI: checks local SQLite and Supabase Cloud DB connectivity."""
+    from app.services.sqlite_sync_service import get_sqlite_conn
+
+    # Check SQLite local counts (takes < 1ms)
+    sqlite_stats = {"status": "ONLINE", "products": 0, "employees": 0, "khata": 0, "bills": 0}
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+        sqlite_stats["products"] = c.execute("SELECT count(*) FROM local_products").fetchone()[0]
+        sqlite_stats["employees"] = c.execute("SELECT count(*) FROM local_employees").fetchone()[0]
+        sqlite_stats["khata"] = c.execute("SELECT count(*) FROM local_khata").fetchone()[0]
+        sqlite_stats["bills"] = c.execute("SELECT count(*) FROM local_bills").fetchone()[0]
+        conn.close()
+    except Exception as sq_err:
+        sqlite_stats["status"] = f"ERROR: {sq_err}"
+
+    # Fast non-blocking checks for cloud DBs (max 0.5s each)
     db1_online = False
     try:
-        async with SessionDb1() as s1:
-            await s1.execute(text("SELECT 1"))
-            db1_online = True
+        async def check_db1():
+            async with SessionDb1() as s1:
+                await s1.execute(text("SELECT 1"))
+        await asyncio.wait_for(check_db1(), timeout=0.5)
+        db1_online = True
+    except Exception:
+        pass
+
+    db2_online = False
+    try:
+        async def check_db2():
+            async with SessionDb2() as s2:
+                await s2.execute(text("SELECT 1"))
+        await asyncio.wait_for(check_db2(), timeout=0.5)
+        db2_online = True
     except Exception:
         pass
 
     db3_online = False
     try:
-        async with SessionDb3() as s3:
-            await s3.execute(text("SELECT 1"))
-            db3_online = True
+        async def check_db3():
+            async with SessionDb3() as s3:
+                await s3.execute(text("SELECT 1"))
+        await asyncio.wait_for(check_db3(), timeout=0.5)
+        db3_online = True
     except Exception:
         pass
 
     pending_bills = get_pending_local_bills()
     return {
         "status": "online",
-        "cloud_db_connected": db1_online or db3_online,
-        "db1_online": db1_online,
-        "db3_online": db3_online,
+        "sqlite_local": sqlite_stats,
+        "cloud_db_connected": db1_online or db2_online or db3_online,
+        "db1_catalog_online": db1_online,
+        "db2_employees_online": db2_online,
+        "db3_finance_online": db3_online,
         "pending_bills_count": len(pending_bills),
         "server": "Bilal Cloth POS Main Shop Server",
     }

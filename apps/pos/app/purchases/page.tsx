@@ -2,12 +2,12 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { ShoppingBag, Search, Plus, RefreshCw, X, Truck } from 'lucide-react';
-import { fetchPurchases, syncOdooPurchases } from '@/lib/api';
+import { fetchPurchases, syncOdooPurchases, getLocalPurchasesCache } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 
 export default function PurchasesPage() {
-  const [purchases, setPurchases] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [purchases, setPurchases] = useState<any[]>(() => getLocalPurchasesCache());
+  const [isLoading, setIsLoading] = useState<boolean>(() => getLocalPurchasesCache().length === 0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
