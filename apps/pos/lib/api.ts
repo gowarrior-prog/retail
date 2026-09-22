@@ -577,6 +577,10 @@ export async function posCheckout(data: any): Promise<any> {
   });
 }
 
+export async function syncOdooBilling(): Promise<any> {
+  return await apiFetch<any>('/sync-odoo/billing', { method: 'POST' });
+}
+
 export async function syncOdoo(): Promise<any> {
   try {
     return await apiFetch<any>('/sync-odoo', { method: 'POST' });

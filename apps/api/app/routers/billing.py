@@ -9,7 +9,7 @@ from app.models.db1_catalog import OrderModel
 from app.models.db3_finance import BillingHistoryModel, CustomerKhataModel, ShopPurchaseModel
 from app.services.pos_service import POSCheckoutRequest, calculate_pos_receipt
 from app.services.backup_service import load_local_backup_fallback
-from app.services.odoo_service import sync_odoo_khata, sync_odoo_purchases
+from app.services.odoo_service import sync_odoo_khata, sync_odoo_purchases, sync_odoo_orders
 
 from app.services.sqlite_sync_service import (
     save_bill_locally,
@@ -21,6 +21,14 @@ from app.services.sqlite_sync_service import (
 )
 
 router = APIRouter(tags=["Billing, Khata & POS Analytics"])
+
+@router.post("/sync-odoo/billing")
+async def sync_billing_from_odoo():
+    """Syncs Sales History & Order Invoices from Odoo ERP into DB3 Finance and SQLite."""
+    res = await sync_odoo_orders()
+    if res.get("status") == "error":
+        raise HTTPException(status_code=500, detail=res.get("message"))
+    return res
 
 @router.post("/sync-odoo/khata")
 async def sync_khata_from_odoo():

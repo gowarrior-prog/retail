@@ -8,7 +8,8 @@ from sqlalchemy.future import select
 from app.core.database import SessionDb1, SessionDb2, SessionDb3
 from app.models.db1_catalog import ProductModel
 from app.models.db2_operations import EmployeeModel
-from app.models.db3_finance import CustomerKhataModel, ShopPurchaseModel
+from app.models.db3_finance import CustomerKhataModel, ShopPurchaseModel, BillingHistoryModel
+from app.services.sqlite_sync_service import save_bill_locally
 
 ODOO_URL = os.getenv("ODOO_URL", "http://192.168.100.2:8069")
 ODOO_DB = os.getenv("ODOO_DB", "BilalClothHouse")
@@ -424,3 +425,101 @@ async def sync_odoo_purchases() -> dict:
         return {"status": "success", "message": f"Successfully synced {synced_count} Purchase orders from Odoo into DB3 Finance!", "synced": synced_count}
     except Exception as e:
         return {"status": "error", "message": f"Odoo Purchase Sync notice: {str(e)}"}
+
+
+async def sync_odoo_orders() -> dict:
+    """Syncs Sales History & POS Invoices from Odoo ERP (pos.order / sale.order / account.move) into DB3 Finance and SQLite."""
+    try:
+        rpc_url = f"{ODOO_URL}/jsonrpc"
+        auth_res = json_rpc(rpc_url, "common", "authenticate", [ODOO_DB, ODOO_USER, ODOO_PASS, {}], timeout=5)
+        if not isinstance(auth_res, dict) or not auth_res.get("result"):
+            return {"status": "offline", "message": "Odoo authentication failed.", "synced": 0}
+        uid = auth_res.get("result")
+
+        # 1. First search pos.order (Odoo POS Orders)
+        pos_orders = []
+        try:
+            res = json_rpc(rpc_url, "object", "execute_kw", [
+                ODOO_DB, uid, ODOO_PASS, "pos.order", "search_read", [[]],
+                {"fields": ["id", "name", "pos_reference", "partner_id", "amount_total", "amount_tax", "date_order"], "limit": 500}
+            ], timeout=15)
+            pos_orders = res.get("result", []) if isinstance(res, dict) and res.get("result") is not None else []
+        except Exception:
+            pass
+
+        # 2. Additional search sale.order if pos.order is empty
+        sale_orders = []
+        if not pos_orders:
+            try:
+                res = json_rpc(rpc_url, "object", "execute_kw", [
+                    ODOO_DB, uid, ODOO_PASS, "sale.order", "search_read", [[]],
+                    {"fields": ["id", "name", "partner_id", "amount_total", "amount_tax", "date_order"], "limit": 500}
+                ], timeout=15)
+                sale_orders = res.get("result", []) if isinstance(res, dict) and res.get("result") is not None else []
+            except Exception:
+                pass
+
+        orders_to_sync = pos_orders or sale_orders
+        synced_count = 0
+
+        async with SessionDb3() as db3:
+            res_all = await db3.execute(select(BillingHistoryModel))
+            existing_invoices = {b.invoice_number for b in res_all.scalars().all() if b.invoice_number}
+
+            for ord_item in orders_to_sync:
+                inv_name = str(ord_item.get("pos_reference") or ord_item.get("name") or f"INV-ODOO-{ord_item.get('id')}")
+                if inv_name in existing_invoices:
+                    continue
+
+                customer = ord_item.get("partner_id")
+                customer_name = customer[1] if isinstance(customer, (list, tuple)) and len(customer) > 1 else "Walk-in Customer"
+                total_amt = float(ord_item.get("amount_total") or 0.0)
+                tax_amt = float(ord_item.get("amount_tax") or 0.0)
+
+                items_json = json.dumps([{
+                    "product_name": f"Odoo Order #{ord_item.get('id')}",
+                    "quantity": 1,
+                    "unit_price": total_amt,
+                    "total_price": total_amt
+                }])
+
+                # Save locally to SQLite
+                try:
+                    save_bill_locally(
+                        invoice_number=inv_name,
+                        customer_phone=customer_name,
+                        total_amount=total_amt,
+                        discount=0.0,
+                        tax=tax_amt,
+                        payment_mode="CASH",
+                        cashier_name="Odoo POS",
+                        item_details_json=items_json
+                    )
+                except Exception:
+                    pass
+
+                # Save to DB3
+                record = BillingHistoryModel(
+                    id=str(uuid.uuid4()),
+                    invoice_number=inv_name,
+                    customer_phone=customer_name,
+                    total_amount=total_amt,
+                    discount=0.0,
+                    tax=tax_amt,
+                    payment_mode="CASH",
+                    cashier_name="Odoo POS",
+                    item_details_json=items_json
+                )
+                db3.add(record)
+                existing_invoices.add(inv_name)
+                synced_count += 1
+
+            await db3.commit()
+
+        return {
+            "status": "success",
+            "message": f"Successfully synced {synced_count} Sales/Billing order history records from Odoo into POS Analytics!",
+            "synced": synced_count
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"Odoo Sales Sync notice: {str(e)}"}

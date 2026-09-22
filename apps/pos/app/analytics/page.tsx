@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { BarChart3, Receipt, Wallet, RefreshCw, X, TrendingUp, DollarSign } from 'lucide-react';
-import { fetchBillingHistory } from '@/lib/api';
+import { BarChart3, Receipt, Wallet, RefreshCw, X, TrendingUp, DollarSign, Download } from 'lucide-react';
+import { fetchBillingHistory, syncOdooBilling, getLocalBillingCache } from '@/lib/api';
 import { formatCurrency, cn } from '@/lib/utils';
 
 export default function AnalyticsPage() {
-  const [billingRecords, setBillingRecords] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [billingRecords, setBillingRecords] = useState<any[]>(() => getLocalBillingCache());
+  const [isLoading, setIsLoading] = useState<boolean>(() => getLocalBillingCache().length === 0);
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
 
   const loadAnalytics = async () => {
-    setIsLoading(true);
+    if (getLocalBillingCache().length === 0) setIsLoading(true);
     try {
       const data = await fetchBillingHistory();
       setBillingRecords(data || []);
@@ -19,6 +20,18 @@ export default function AnalyticsPage() {
       console.error('Failed to load billing history:', err);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSyncOdooOrders = async () => {
+    setIsSyncing(true);
+    try {
+      await syncOdooBilling();
+      await loadAnalytics();
+    } catch (err) {
+      console.error('Failed to sync Odoo billing orders:', err);
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -44,14 +57,25 @@ export default function AnalyticsPage() {
           </p>
         </div>
 
-        <button
-          onClick={loadAnalytics}
-          disabled={isLoading}
-          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer active:scale-95"
-        >
-          <RefreshCw className={cn('w-4 h-4 text-slate-600', isLoading && 'animate-spin')} />
-          <span>Refresh</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSyncOdooOrders}
+            disabled={isSyncing}
+            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer active:scale-95"
+          >
+            <Download className={cn('w-4 h-4', isSyncing && 'animate-bounce')} />
+            <span>{isSyncing ? 'Syncing Odoo...' : 'Sync Odoo Orders'}</span>
+          </button>
+
+          <button
+            onClick={loadAnalytics}
+            disabled={isLoading}
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer active:scale-95"
+          >
+            <RefreshCw className={cn('w-4 h-4 text-slate-600', isLoading && 'animate-spin')} />
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
 
       {/* Metric Cards */}
