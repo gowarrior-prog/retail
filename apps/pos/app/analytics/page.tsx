@@ -6,13 +6,13 @@ import { fetchBillingHistory, syncOdooBilling, getLocalBillingCache } from '@/li
 import { formatCurrency, cn } from '@/lib/utils';
 
 export default function AnalyticsPage() {
-  const [billingRecords, setBillingRecords] = useState<any[]>(() => getLocalBillingCache());
-  const [isLoading, setIsLoading] = useState<boolean>(() => getLocalBillingCache().length === 0);
+  const [billingRecords, setBillingRecords] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
 
   const loadAnalytics = async () => {
-    if (getLocalBillingCache().length === 0) setIsLoading(true);
+    setIsLoading(true);
     try {
       const data = await fetchBillingHistory();
       setBillingRecords(data || []);

@@ -186,94 +186,32 @@ export interface OfflineBill {
 }
 
 export function getLocalProductCache(): Product[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem('pos_local_products_cache');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
-export function saveLocalProductCache(products: Product[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('pos_local_products_cache', JSON.stringify(products));
-    // Dual save to IndexedDB as well for large dataset protection
-    setOfflineStore('products', products);
-  } catch (err) {
-    console.warn('[API] Failed to save local product cache:', err);
-  }
+export function saveLocalProductCache(_products: Product[]): void {
+  // Browser client-side caching disabled per user requirement.
+  // All data is stored server-side in SQLite.
 }
 
 export function getLocalOfflineBills(): OfflineBill[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem('pos_pending_offline_bills');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
-export function saveLocalOfflineBills(bills: OfflineBill[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('pos_pending_offline_bills', JSON.stringify(bills));
-  } catch (err) {
-    console.warn('[API] Failed to save local offline bills:', err);
-  }
+export function saveLocalOfflineBills(_bills: OfflineBill[]): void {
+  // Disabled
 }
 
 export async function fetchProducts(): Promise<Product[]> {
-  // Load from IndexedDB / LocalStorage first so response is instant
-  let cached = getLocalProductCache();
-  if (!cached || cached.length === 0) {
-    cached = await getOfflineStore<Product>('products');
-  }
-
   try {
     const raw = await apiFetch<any[]>('/products');
     if (Array.isArray(raw)) {
-      const parsed = z.array(ProductSchema.partial()).parse(raw) as Product[];
-      const serverMap = new Map<string, Product>();
-      parsed.forEach(p => serverMap.set(p.id, p));
-
-      // Upload any local products created offline
-      const unsynced = cached.filter(c => c.id && c.id.startsWith('local-'));
-      if (unsynced.length > 0) {
-        for (const prod of unsynced) {
-          try {
-            const res = await apiFetch<any>('/products', {
-              method: 'POST',
-              body: JSON.stringify({
-                name: prod.name,
-                price: prod.price,
-                cost_price: prod.cost_price,
-                profit_margin: prod.profit_margin,
-                category: prod.category,
-                image_url: prod.image_url,
-                stock: prod.stock,
-                barcode: prod.barcode,
-                sku: prod.sku,
-              }),
-            });
-            const serverProd = ProductSchema.parse(res);
-            serverMap.set(serverProd.id, serverProd);
-          } catch (e) {
-            console.warn('[Sync] Could not upload local product during fetch:', e);
-          }
-        }
-      }
-
-      const finalProducts = Array.from(serverMap.values());
-      saveLocalProductCache(finalProducts);
-      return finalProducts;
+      return z.array(ProductSchema.partial()).parse(raw) as Product[];
     }
-    return cached;
+    return [];
   } catch (err) {
-    console.warn('[API] Backend offline during fetchProducts, returning offline cache:', err);
-    return cached;
+    console.warn('[API] fetchProducts notice:', err);
+    return [];
   }
 }
 
@@ -366,108 +304,58 @@ export async function deleteProduct(id: string): Promise<any> {
 }
 
 export function getLocalEmployeesCache(): Employee[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem('pos_local_employees_cache');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
-export function saveLocalEmployeesCache(employees: Employee[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('pos_local_employees_cache', JSON.stringify(employees));
-    setOfflineStore('employees', employees);
-  } catch (err) {
-    console.warn('[API] Failed to save local employees cache:', err);
-  }
+export function saveLocalEmployeesCache(_employees: Employee[]): void {
+  // Disabled per user request (no browser client-side caching)
 }
 
 export function getLocalKhataCache(): any[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem('pos_local_khata_cache');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
-export function saveLocalKhataCache(khata: any[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('pos_local_khata_cache', JSON.stringify(khata));
-    setOfflineStore('khata', khata);
-  } catch (err) {
-    console.warn('[API] Failed to save local khata cache:', err);
-  }
+export function saveLocalKhataCache(_khata: any[]): void {
+  // Disabled
 }
 
 export async function fetchEmployees(): Promise<Employee[]> {
-  let cached = getLocalEmployeesCache();
-  if (!cached || cached.length === 0) {
-    cached = await getOfflineStore<Employee>('employees');
-  }
   try {
     const raw = await apiFetch<any[]>('/employees');
     if (Array.isArray(raw)) {
-      const parsed = z.array(EmployeeSchema.partial()).parse(raw) as Employee[];
-      saveLocalEmployeesCache(parsed);
-      return parsed;
+      return z.array(EmployeeSchema.partial()).parse(raw) as Employee[];
     }
-    return cached;
+    return [];
   } catch {
-    return cached;
+    return [];
   }
 }
 
 export async function createEmployee(data: any): Promise<Employee> {
   const validated = EmployeeCreateSchema.parse(data);
-  try {
-    const res = await apiFetch<any>('/employees', {
-      method: 'POST',
-      body: JSON.stringify(validated),
-    });
-    const emp = EmployeeSchema.parse(res);
-    const cached = getLocalEmployeesCache();
-    saveLocalEmployeesCache([emp, ...cached.filter(e => e.id !== emp.id)]);
-    return emp;
-  } catch {
-    const localEmp = { id: `emp-${Date.now()}`, ...data } as Employee;
-    const cached = getLocalEmployeesCache();
-    saveLocalEmployeesCache([localEmp, ...cached.filter(e => e.id !== localEmp.id)]);
-    return localEmp;
-  }
+  const res = await apiFetch<any>('/employees', {
+    method: 'POST',
+    body: JSON.stringify(validated),
+  });
+  return EmployeeSchema.parse(res);
 }
 
 export async function deleteEmployee(id: string): Promise<any> {
-  const cached = getLocalEmployeesCache();
-  saveLocalEmployeesCache(cached.filter(e => e.id !== id));
   try {
     return await apiFetch<any>(`/employees/${id}`, {
       method: 'DELETE',
     });
   } catch {
-    return { status: 'success_offline' };
+    return { status: 'success' };
   }
 }
 
 export async function fetchKhata(): Promise<any[]> {
-  let cached = getLocalKhataCache();
-  if (!cached || cached.length === 0) {
-    cached = await getOfflineStore<any>('khata');
-  }
   try {
     const raw = await apiFetch<any[]>('/khata');
-    if (Array.isArray(raw)) {
-      saveLocalKhataCache(raw);
-      return raw;
-    }
-    return cached;
+    return Array.isArray(raw) ? raw : [];
   } catch {
-    return cached;
+    return [];
   }
 }
 
@@ -484,7 +372,6 @@ export async function posSalesReturn(data: {
       body: JSON.stringify(data),
     });
   } catch (err: any) {
-    // Offline fallback for sales return
     return {
       status: 'success_offline',
       return_invoice: `RET-${Date.now().toString().slice(-6)}`,
@@ -495,77 +382,39 @@ export async function posSalesReturn(data: {
 }
 
 export function getLocalPurchasesCache(): any[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem('pos_local_purchases_cache');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
-export function saveLocalPurchasesCache(purchases: any[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('pos_local_purchases_cache', JSON.stringify(purchases));
-    setOfflineStore('purchases', purchases);
-  } catch (err) {
-    console.warn('[API] Failed to save local purchases cache:', err);
-  }
+export function saveLocalPurchasesCache(_purchases: any[]): void {
+  // Disabled
 }
 
 export function getLocalBillingCache(): BillingRecord[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem('pos_local_billing_cache');
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
-export function saveLocalBillingCache(billing: BillingRecord[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem('pos_local_billing_cache', JSON.stringify(billing));
-    setOfflineStore('billing', billing);
-  } catch (err) {
-    console.warn('[API] Failed to save local billing cache:', err);
-  }
+export function saveLocalBillingCache(_billing: BillingRecord[]): void {
+  // Disabled
 }
 
 export async function fetchPurchases(): Promise<any[]> {
-  let cached = getLocalPurchasesCache();
-  if (!cached || cached.length === 0) {
-    cached = await getOfflineStore<any>('purchases');
-  }
   try {
     const raw = await apiFetch<any[]>('/purchases');
-    if (Array.isArray(raw)) {
-      saveLocalPurchasesCache(raw);
-      return raw;
-    }
-    return cached;
+    return Array.isArray(raw) ? raw : [];
   } catch {
-    return cached;
+    return [];
   }
 }
 
 export async function fetchBillingHistory(): Promise<BillingRecord[]> {
-  let cached = getLocalBillingCache();
-  if (!cached || cached.length === 0) {
-    cached = await getOfflineStore<BillingRecord>('billing');
-  }
   try {
     const raw = await apiFetch<any[]>('/billing-history');
     if (Array.isArray(raw)) {
-      const parsed = z.array(BillingRecordSchema.partial()).parse(raw) as BillingRecord[];
-      saveLocalBillingCache(parsed);
-      return parsed;
+      return z.array(BillingRecordSchema.partial()).parse(raw) as BillingRecord[];
     }
-    return cached;
+    return [];
   } catch {
-    return cached;
+    return [];
   }
 }
 
