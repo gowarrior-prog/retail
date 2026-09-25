@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Bilal Cloth &amp; Silk Center — POS Terminal</title>
+<!-- Tailwind CSS v3 with Plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- FontAwesome for precise POS icon fidelity -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style data-purpose="base-typography">
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap');
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+    .font-mono-num {
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+<style data-purpose="custom-pos-styles">
+    /* Subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-[#f8fafc] text-slate-800 flex flex-col antialiased">
+<!-- BEGIN: OS Window Titlebar -->
+<div class="bg-[#1e232a] text-slate-300 text-xs px-3 py-1 flex items-center justify-between border-b border-slate-800 select-none flex-shrink-0" data-purpose="window-title-bar">
+<div class="flex items-center space-x-2">
+<i class="fa-solid fa-cash-register text-emerald-400 text-[11px]"></i>
+<span class="font-medium tracking-wide text-slate-200">Bilal Cloth &amp; Silk Center — POS Terminal</span>
+</div>
+<!-- Window controls (minimize, maximize, close) -->
+<div class="flex items-center space-x-4 text-slate-400 text-xs">
+<button class="hover:text-white transition-colors" title="Minimize"><i class="fa-solid fa-minus text-[10px]"></i></button>
+<button class="hover:text-white transition-colors" title="Maximize"><i class="fa-regular fa-square text-[10px]"></i></button>
+<button class="hover:text-red-400 transition-colors" title="Close"><i class="fa-solid fa-xmark text-[12px]"></i></button>
+</div>
+</div>
+<!-- END: OS Window Titlebar -->
+<!-- BEGIN: Top Application Header -->
+<header class="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between shadow-sm flex-shrink-0" data-purpose="top-navigation-header">
+<!-- Brand identity -->
+<div class="flex items-center space-x-6">
+<div class="flex items-center space-x-2.5">
+<!-- Logo Stamp -->
+<div class="w-9 h-9 rounded-full border border-emerald-600/30 flex items-center justify-center bg-emerald-50 text-emerald-700 text-base shadow-xs">
+<i class="fa-solid fa-feather-pointed"></i>
+</div>
+<div>
+<div class="flex items-center space-x-2">
+<span class="font-bold text-[15px] tracking-tight text-slate-900 leading-none">BILAL CLOTH</span>
+<span class="bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0] text-[10px] font-bold px-1.5 py-0.5 rounded leading-none">POS v17</span>
+</div>
+<span class="text-[9.5px] uppercase tracking-wider text-slate-500 font-semibold block mt-0.5">HOUSE &amp; SILK CENTER • NAROWAL</span>
+</div>
+</div>
+<!-- Active Orders Count Pill -->
+<div class="hidden sm:flex items-center space-x-1.5 bg-emerald-50/70 border border-emerald-200/80 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-md">
+<i class="fa-solid fa-layer-group text-emerald-600 text-[11px]"></i>
+<span><strong class="text-emerald-700">1</strong> Active Order</span>
+</div>
+</div>
+<!-- Header Actions & Cashier Profile -->
+<div class="flex items-center space-x-3.5">
+<!-- Cashier User Pill -->
+<div class="flex items-center bg-slate-100 hover:bg-slate-200/80 transition-colors rounded-full p-1 pr-3 cursor-pointer border border-slate-200">
+<div class="w-6 h-6 rounded-full bg-[#059669] text-white flex items-center justify-center font-bold text-xs">
+          A
+        </div>
+<span class="text-xs font-semibold text-slate-800 ml-1.5">AdminCashier</span>
+</div>
+<!-- Header Icon Actions -->
+<div class="flex items-center space-x-2 text-slate-500 text-sm border-l border-slate-200 pl-3">
+<button class="p-1.5 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors" title="Sync / Refresh Data">
+<i class="fa-solid fa-arrows-rotate"></i>
+</button>
+<button class="p-1.5 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors" title="Shift &amp; Order History">
+<i class="fa-regular fa-clock"></i>
+</button>
+<button class="p-1.5 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors" title="Lock POS Terminal">
+<i class="fa-solid fa-lock"></i>
+</button>
+</div>
+</div>
+</header>
+<!-- END: Top Application Header -->
+<!-- BEGIN: Main App Container -->
+<div class="flex flex-1 overflow-hidden">
+<!-- BEGIN: Left Vertical Navigation Sidebar -->
+<aside class="w-[62px] bg-white border-r border-slate-200 flex flex-col items-center justify-between py-2.5 flex-shrink-0" data-purpose="left-navigation-sidebar">
+<div class="flex flex-col items-center space-y-3 w-full">
+<!-- Active POS item (green square badge) -->
+<button class="w-[48px] h-[48px] bg-[#059669] text-white rounded-lg flex flex-col items-center justify-center shadow-xs hover:bg-[#047857] transition-all">
+<i class="fa-solid fa-cart-shopping text-base"></i>
+<span class="text-[9px] font-bold tracking-tight uppercase mt-0.5">POS</span>
+</button>
+<!-- Stock -->
+<button class="w-[50px] py-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg flex flex-col items-center justify-center transition-all group">
+<i class="fa-solid fa-boxes-stacked text-base group-hover:scale-105 transition-transform"></i>
+<span class="text-[9.5px] font-medium mt-1">Stock</span>
+</button>
+<!-- Khata (Customer Ledger) -->
+<button class="w-[50px] py-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg flex flex-col items-center justify-center transition-all group">
+<i class="fa-solid fa-book-open text-base group-hover:scale-105 transition-transform"></i>
+<span class="text-[9.5px] font-medium mt-1">Khata</span>
+</button>
+<!-- Buy (Purchases) -->
+<button class="w-[50px] py-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg flex flex-col items-center justify-center transition-all group">
+<i class="fa-solid fa-bag-shopping text-base group-hover:scale-105 transition-transform"></i>
+<span class="text-[9.5px] font-medium mt-1">Buy</span>
+</button>
+<!-- Staff -->
+<button class="w-[50px] py-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg flex flex-col items-center justify-center transition-all group">
+<i class="fa-solid fa-user-group text-base group-hover:scale-105 transition-transform"></i>
+<span class="text-[9.5px] font-medium mt-1">Staff</span>
+</button>
+<!-- Sales -->
+<button class="w-[50px] py-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg flex flex-col items-center justify-center transition-all group">
+<i class="fa-solid fa-chart-simple text-base group-hover:scale-105 transition-transform"></i>
+<span class="text-[9.5px] font-medium mt-1">Sales</span>
+</button>
+<!-- Setup -->
+<button class="w-[50px] py-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg flex flex-col items-center justify-center transition-all group">
+<i class="fa-solid fa-gear text-base group-hover:scale-105 transition-transform"></i>
+<span class="text-[9.5px] font-medium mt-1">Setup</span>
+</button>
+</div>
+<!-- Bottom Ready Floating Check Button -->
+<div class="mt-auto pt-2">
+<button class="w-8 h-8 rounded-full border border-emerald-400 bg-emerald-50 text-emerald-600 flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-xs" title="Terminal Status: Online">
+<i class="fa-solid fa-check text-xs"></i>
+</button>
+</div>
+</aside>
+<!-- END: Left Vertical Navigation Sidebar -->
+<!-- BEGIN: Workspace Container -->
+<div class="flex-1 flex overflow-hidden">
+<!-- BEGIN: Left Cart & Numpad Panel (Original Section Replicated with exact fidelity) -->
+<section class="w-[380px] bg-white border-r border-slate-200 flex flex-col flex-shrink-0 shadow-xs" data-purpose="cart-and-tender-panel">
+<!-- Cart Register Header -->
+<div class="p-3 border-b border-slate-200 flex items-center justify-between bg-white">
+<div class="flex items-center space-x-2 text-slate-700 font-semibold text-xs tracking-wide">
+<i class="fa-solid fa-file-invoice text-slate-400 text-xs"></i>
+<span>Active Register</span>
+</div>
+<span class="px-2 py-0.5 rounded text-[11px] font-bold bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]">
+            Ready
+          </span>
+</div>
+<!-- Empty Cart Display Area -->
+<div class="flex-1 flex flex-col items-center justify-center text-center p-6 bg-white select-none">
+<div class="w-20 h-20 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-300 mb-3.5 shadow-inner">
+<i class="fa-solid fa-cart-shopping text-3xl"></i>
+</div>
+<h4 class="text-sm font-semibold text-slate-600 tracking-tight">Cart is empty</h4>
+<p class="text-xs text-slate-400 mt-1 max-w-[210px] leading-relaxed">Scan barcode or enter SKU code to add fabric items</p>
+</div>
+<!-- Order Totals summary block -->
+<div class="px-4 py-2.5 border-t border-slate-200 bg-slate-50/50 space-y-1">
+<div class="flex items-center justify-between text-xs text-slate-500 font-medium">
+<span>Subtotal</span>
+<span class="font-mono-num text-slate-600">Rs. 0</span>
+</div>
+<div class="flex items-center justify-between pt-1 border-t border-slate-200/70">
+<span class="text-xs font-bold text-slate-800 uppercase tracking-wider">TOTAL PAYABLE</span>
+<span class="text-base font-black text-[#059669] font-mono-num">Rs. 0</span>
+</div>
+</div>
+<!-- Quick Cart Action Buttons -->
+<div class="grid grid-cols-4 gap-1.5 p-2 bg-slate-100 border-t border-slate-200 text-xs">
+<button class="flex items-center justify-center space-x-1 py-1.5 bg-white hover:bg-slate-50 rounded border border-slate-200 text-slate-700 font-medium transition-colors">
+<i class="fa-regular fa-note-sticky text-indigo-500 text-xs"></i>
+<span class="text-[11px]">Note</span>
+</button>
+<button class="flex items-center justify-center space-x-1 py-1.5 bg-white hover:bg-slate-50 rounded border border-slate-200 text-slate-700 font-medium transition-colors">
+<i class="fa-solid fa-arrow-rotate-left text-red-500 text-xs"></i>
+<span class="text-[11px]">Return</span>
+</button>
+<button class="flex items-center justify-center space-x-1 py-1.5 bg-white hover:bg-slate-50 rounded border border-slate-200 text-slate-700 font-medium transition-colors">
+<i class="fa-solid fa-receipt text-amber-500 text-xs"></i>
+<span class="text-[11px]">Bills</span>
+</button>
+<button class="flex items-center justify-center space-x-1 py-1.5 bg-white hover:bg-slate-50 rounded border border-slate-200 text-slate-700 font-medium transition-colors">
+<i class="fa-solid fa-code-fork text-purple-500 text-xs"></i>
+<span class="text-[11px]">Split</span>
+</button>
+</div>
+<!-- Tender & POS Numpad Block -->
+<div class="p-2 bg-slate-100 border-t border-slate-200 flex space-x-2">
+<!-- Big Mint Payment Tender Button -->
+<button class="w-1/3 bg-[#5ebfa2] hover:bg-[#4ea88e] text-white rounded-lg p-2 flex flex-col justify-between items-center transition-colors shadow-xs active:scale-[0.98]">
+<div class="w-full flex justify-start text-white/90">
+<i class="fa-solid fa-chevron-right text-lg ml-1"></i>
+</div>
+<div class="text-center my-auto">
+<span class="block text-[11px] font-extrabold uppercase tracking-wider text-white">PAYMENT</span>
+<span class="block text-sm font-bold font-mono-num text-white mt-1 leading-none">Rs. 0</span>
+</div>
+<div class="h-2"></div>
+</button>
+<!-- 4x4 Grid Numpad -->
+<div class="w-2/3 grid grid-cols-4 gap-1.5 text-slate-800 font-semibold">
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">1</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">2</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">3</button>
+<button class="h-10 bg-[#059669] hover:bg-[#047857] text-white rounded border border-[#059669] flex items-center justify-center text-xs font-bold uppercase shadow-2xs">Qty</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">4</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">5</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">6</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-xs text-slate-700 font-bold uppercase shadow-2xs">Disc</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">7</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">8</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">9</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-xs text-slate-700 font-bold uppercase shadow-2xs">Price</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-xs font-mono-num font-bold shadow-2xs">+/-</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-sm shadow-2xs font-mono-num">0</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-base font-bold shadow-2xs">.</button>
+<button class="h-10 bg-white hover:bg-slate-50 rounded border border-slate-200 flex items-center justify-center text-slate-600 shadow-2xs" title="Backspace">
+<i class="fa-solid fa-delete-left text-xs"></i>
+</button>
+</div>
+</div>
+</section>
+<!-- END: Left Cart & Numpad Panel -->
+<!-- BEGIN: Right Main Counter Workspace (Replaced Product Grid Area) -->
+<!-- Per instruction: "buss jahan products show ho rahii h on ko remove karo, baaki sab same rakho" -->
+<main class="flex-1 bg-[#f8fafc] flex flex-col p-4 overflow-y-auto" data-purpose="clean-counter-workspace">
+<!-- Top Quick Barcode / SKU Entry Bar -->
+<div class="bg-white rounded-xl border border-slate-200/80 p-3.5 shadow-2xs mb-4">
+<div class="flex items-center space-x-3">
+<div class="relative flex-1">
+<span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+<i class="fa-solid fa-barcode text-base"></i>
+</span>
+<input class="w-full pl-10 pr-24 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 focus:bg-white transition-all font-medium" placeholder="Scan barcode or type SKU / Fabric Name here... (Press F2 to focus)" type="text"/>
+<span class="absolute inset-y-0 right-0 pr-3 flex items-center text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                [Press Enter]
+              </span>
+</div>
+<button class="bg-[#059669] hover:bg-[#047857] text-white px-4 py-2.5 rounded-lg text-xs font-semibold flex items-center space-x-1.5 transition-colors shadow-xs">
+<i class="fa-solid fa-magnifying-glass"></i>
+<span>Find Item</span>
+</button>
+</div>
+</div>
+<!-- Center Counter Quick Operations Area -->
+<!-- Lower Desk Dashboard: Shift Stats & Parked Receipts -->
+<div class="flex-1 flex flex-col min-h-0 space-y-3.5"><div class="flex items-center space-x-2 overflow-x-auto pb-1 flex-shrink-0 text-xs"><button class="px-3.5 py-1.5 rounded-lg bg-[#059669] text-white font-semibold shadow-xs flex-shrink-0">All Items</button><button class="px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 font-medium transition-colors flex-shrink-0">Unstitched Lawn</button><button class="px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 font-medium transition-colors flex-shrink-0">Cotton Karandi</button><button class="px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 font-medium transition-colors flex-shrink-0">Chiffon Silk</button><button class="px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 font-medium transition-colors flex-shrink-0">Embroidered</button><button class="px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 font-medium transition-colors flex-shrink-0">Shawls</button><button class="px-3.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-emerald-700 hover:border-emerald-200 font-medium transition-colors flex-shrink-0">Mens Kurta</button></div><div class="flex-1 flex flex-col min-h-0 relative overflow-hidden">
+<!-- Product Catalog Grid - 4 Rows (12 fabric products) -->
+<div class="flex-1 overflow-y-auto pr-1 pb-2">
+<div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
+<!-- Row 1: Item 1 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Lawn Collection</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-2091</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">GulAhmed GoldLeaf Latha</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">4.5 Gazz • Super Fine Cotton</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 4,800</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 1: Item 2 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Shawls</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-3104</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Pashmina Embroidered Shawl</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Pure Wool • Kashmiri Tilla</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 9,500</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 1: Item 3 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Karandi</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-1842</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Karandi 3-Piece Festive</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Unstitched • Heavy Neckline</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 6,250</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 1: Item 4 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Chiffon</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-4409</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Pure Chiffon Dupatta Suit</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Bamber Silk Dupatta • 3-Pc</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 8,900</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 2: Item 5 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Latha</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-1088</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Egyptian Cotton Latha</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">White Gloss Finish • 4.5 Mtr</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 5,400</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 2: Item 6 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Summer '26</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-5210</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Printed Lawn Summer 2026</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Digital Print • Voil Dupatta</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 3,650</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 2: Item 7 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Raw Silk</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-7720</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Pure Rawsilk Embroidered</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">80g Handloom • Zari Border</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 11,200</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 2: Item 8 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Velvet</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-6190</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Micro Velvet 9000 Shawl</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Embossed Floral • Heavy Border</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 14,500</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 3: Item 9 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Organza</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-8012</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Kora Organza Formal Suit</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Sequins Cutwork • Silk Lining</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 7,850</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 3: Item 10 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Banarsi</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-4911</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Banarsi Chiffon Dupatta</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Antique Gold Weave • 2.5 Gazz</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 4,200</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 3: Item 11 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Khaddar</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-3829</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Kamalia Handloom Khaddar</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Winter Weight • 7 Mtr Men Cut</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 3,900</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+<!-- Row 3: Item 12 -->
+<div class="bg-white rounded-xl border border-slate-200/90 p-3 flex flex-col justify-between hover:border-emerald-400 hover:shadow-xs transition-all cursor-pointer group">
+<div class="flex items-start justify-between">
+<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">Linen</span>
+<span class="text-[10px] font-medium text-slate-400 font-mono-num">SKU-5440</span>
+</div>
+<div class="my-2">
+<h4 class="text-xs font-bold text-slate-800 group-hover:text-emerald-700 transition-colors">Heavy Linen Digital 3-Pc</h4>
+<span class="text-[11px] text-slate-400 block mt-0.5 truncate">Pashmina Woolen Shawl Dupatta</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-slate-100">
+<span class="text-xs font-black text-slate-900 font-mono-num">Rs. 5,150</span>
+<button class="px-2.5 py-1 rounded bg-slate-50 hover:bg-[#059669] text-slate-700 hover:text-white border border-slate-200 hover:border-[#059669] text-[11px] font-semibold transition-colors flex items-center space-x-1">
+<i class="fa-solid fa-plus text-[9px]"></i><span>Add</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Floating Anchored Hold / Parked Bills Toggle Button (Right Edge) -->
+<button class="absolute right-0 top-6 z-20 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs py-2 px-3 rounded-l-xl shadow-sm flex items-center space-x-2 border-l border-t border-b border-amber-600 transition-all hover:pr-4 cursor-pointer group" onclick="document.getElementById('parked-drawer-backdrop').classList.remove('hidden'); document.getElementById('parked-drawer-panel').classList.remove('translate-x-full');">
+<i class="fa-solid fa-pause text-xs group-hover:scale-110 transition-transform"></i>
+<span class="tracking-wide">Hold Bills</span>
+<span class="bg-white text-amber-600 rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-black">1</span>
+</button>
+<!-- Interactive Slide-over Backdrop Overlay -->
+<div class="hidden absolute inset-0 bg-slate-900/30 backdrop-blur-[1px] z-30 transition-opacity" id="parked-drawer-backdrop" onclick="document.getElementById('parked-drawer-backdrop').classList.add('hidden'); document.getElementById('parked-drawer-panel').classList.add('translate-x-full');"></div>
+<!-- Slide-out Drawer Panel -->
+<div class="absolute top-0 right-0 bottom-0 w-80 bg-white shadow-xl z-40 border-l border-slate-200 flex flex-col justify-between transition-transform duration-300 translate-x-full" id="parked-drawer-panel">
+<!-- Drawer Header -->
+<div class="p-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+<div class="flex items-center space-x-2">
+<div class="w-6 h-6 rounded bg-amber-100 border border-amber-200 flex items-center justify-center text-amber-700 text-xs">
+<i class="fa-solid fa-pause"></i>
+</div>
+<div>
+<h4 class="text-xs font-bold text-slate-800 uppercase tracking-wide">Parked / Hold Bills</h4>
+<span class="text-[10px] text-slate-400 font-medium block">1 active bill currently waiting</span>
+</div>
+</div>
+<button class="p-1 text-slate-400 hover:text-slate-700 rounded-md hover:bg-slate-200 transition-colors" onclick="document.getElementById('parked-drawer-backdrop').classList.add('hidden'); document.getElementById('parked-drawer-panel').classList.add('translate-x-full');" title="Close Drawer">
+<i class="fa-solid fa-xmark text-sm"></i>
+</button>
+</div>
+<!-- Drawer Content: List of Parked Bills -->
+<div class="p-3.5 space-y-3 overflow-y-auto flex-1 bg-white">
+<div class="p-3 rounded-xl border border-amber-200 bg-amber-50/40 flex flex-col space-y-2.5 shadow-2xs hover:border-amber-300 transition-all">
+<div class="flex items-center justify-between">
+<span class="text-xs font-bold text-slate-900 font-mono">#ORD-2026-0941</span>
+<span class="text-[10px] font-semibold text-amber-700 bg-amber-100/70 px-1.5 py-0.5 rounded border border-amber-200">10m ago</span>
+</div>
+<div class="text-slate-600">
+<span class="text-xs font-semibold block text-slate-800">Cotton Karandi + Organza Suit</span>
+<span class="text-[10.5px] text-slate-400 block mt-0.5">2 items • Customer: Haji Imran (Narowal)</span>
+</div>
+<div class="flex items-center justify-between pt-2 border-t border-amber-200/60">
+<div>
+<span class="text-[10px] uppercase font-bold text-slate-400 block">Total</span>
+<span class="text-sm font-black text-slate-900 font-mono-num">Rs. 16,500</span>
+</div>
+<button class="px-3 py-1.5 bg-[#059669] hover:bg-[#047857] text-white text-xs font-bold rounded-lg shadow-xs flex items-center space-x-1.5 transition-colors cursor-pointer">
+<span>Resume Bill</span>
+<i class="fa-solid fa-chevron-right text-[10px]"></i>
+</button>
+</div>
+</div>
+</div>
+<!-- Drawer Footer Actions -->
+<div class="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
+<span class="text-slate-500 font-medium text-[11px]">Total Parked Amount: <strong class="text-slate-800 font-mono-num">Rs. 16,500</strong></span>
+<button class="text-emerald-700 hover:text-emerald-900 font-semibold hover:underline text-[11.5px]">All Records</button>
+</div>
+</div>
+</div></div>
+</main>
+<!-- END: Right Main Counter Workspace -->
+</div>
+<!-- END: Workspace Container -->
+</div>
+<!-- END: Main App Container -->
+<!-- BEGIN: Bottom POS Status Footer Bar (Exact Fidelity) -->
+<footer class="bg-white border-t border-slate-200 px-4 py-1.5 text-xs text-slate-600 flex items-center justify-between shadow-2xs flex-shrink-0" data-purpose="status-bar-footer">
+<div class="flex items-center space-x-3 text-[11.5px]">
+<div class="flex items-center space-x-1.5">
+<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+<span class="font-medium text-slate-700">DB Connected</span>
+</div>
+<span class="text-slate-300">•</span>
+<span class="text-slate-600 font-medium">Barcode Scanner Ready</span>
+<span class="text-slate-300">•</span>
+<span class="font-mono-num text-slate-500">REG-04</span>
+<span class="text-slate-300">•</span>
+<span class="font-mono-num text-slate-500">POS/2026/09/0014</span>
+</div>
+<!-- Right Keyboard Shortcuts -->
+<div class="flex items-center space-x-4 text-[11.5px] text-slate-500 font-medium">
+<span class="hover:text-slate-800 cursor-pointer"><strong class="font-mono text-slate-700 font-semibold">[Enter]</strong> Pay</span>
+<span class="hover:text-slate-800 cursor-pointer"><strong class="font-mono text-slate-700 font-semibold">[Esc]</strong> Cancel</span>
+</div>
+</footer>
+<!-- END: Bottom POS Status Footer Bar -->
+</body></html>

@@ -16,7 +16,8 @@ from app.routers import (
     auth_router,
     employees_router,
     billing_router,
-    admin_router
+    admin_router,
+    printer_router,
 )
 from app.services.odoo_service import sync_all_odoo_products
 from app.services.backup_service import backup_all_data_to_hard_drive
@@ -118,6 +119,7 @@ app.include_router(auth_router)
 app.include_router(employees_router)
 app.include_router(billing_router)
 app.include_router(admin_router)
+app.include_router(printer_router)
 
 from app.services.backup_service import backup_all_data_to_hard_drive, get_offline_data_summary
 

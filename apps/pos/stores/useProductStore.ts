@@ -33,17 +33,9 @@ export const useProductStore = create<ProductState>((set, get) => ({
   error: null,
 
   loadProducts: async (force = false) => {
-    const { products } = get();
-    if (products.length === 0) {
-      const cached = getLocalProductCache();
-      if (cached.length > 0) {
-        set({ products: cached, filteredProducts: cached, isLoading: false });
-      }
-    }
-
     try {
       const liveProducts = await fetchProducts();
-      if (Array.isArray(liveProducts) && liveProducts.length > 0) {
+      if (Array.isArray(liveProducts)) {
         set({ products: liveProducts, filteredProducts: liveProducts, isLoading: false });
       } else {
         set({ isLoading: false });

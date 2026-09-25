@@ -1,140 +1,159 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, ArrowRight, Printer } from 'lucide-react';
+import { X, CreditCard, Banknote, Printer } from 'lucide-react';
 import { useCartStore } from '@/stores/useCartStore';
-import { posCheckout, fetchKhata } from '@/lib/api';
+import { posCheckout } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
-import ThermalReceiptModal from './ThermalReceiptModal';
-import PaymentModeButtons from './PaymentModeButtons';
-import PaymentCustomerSelect from './PaymentCustomerSelect';
+import { showProfessionalAlert } from '@/lib/alert';
+import { showCatalogToast } from '@/lib/toast';
+import { playToastAudio } from '@/lib/toastAudio';
+import ThermalReceiptContent from './ThermalReceiptContent';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function PaymentModal({ onClose }: { onClose: () => void }) {
-  const {
-    items, grandTotal, tenderedAmount, setTenderedAmount,
-    paymentMode, setPaymentMode, customerName, setCustomerName,
-    customerPhone, setCustomerPhone, orderNote, clearCart, cashierName
-  } = useCartStore();
-
+  const { items, grandTotal, subtotal, discountTotal, clearCart, cashierName } = useCartStore();
   const total = grandTotal();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [receiptData, setReceiptData] = useState<any | null>(null);
 
-  const [khataCustomers, setKhataCustomers] = useState<any[]>([]);
-  const [customerSearch, setCustomerSearch] = useState('');
-  const [selectedKhataCustomer, setSelectedKhataCustomer] = useState<any | null>(null);
-  const [showNewCustInput, setShowNewCustInput] = useState(false);
-  const [newCustomerName, setNewCustomerName] = useState('');
-  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'CARD'>('CASH');
+  const [tendered, setTendered] = useState<number>(total);
+  const [sendDigitalReceipt, setSendDigitalReceipt] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const changeDue = Math.max(0, tendered - total);
+  const currentCashier = cashierName || 'Admin';
 
   useEffect(() => {
-    fetchKhata().then((res) => setKhataCustomers(res || [])).catch(() => {});
+    requestAnimationFrame(() => setIsOpen(true));
   }, []);
 
-  const filteredKhatas = khataCustomers.filter((k) => {
-    if (!customerSearch.trim()) return false;
-    const q = customerSearch.toLowerCase();
-    return (k.customer_name || '').toLowerCase().includes(q) || (k.phone || '').includes(q);
-  });
-
-  const parsedTendered = parseFloat(tenderedAmount) || total;
-  const calculatedChange = Math.max(0, parsedTendered - total);
+  const handleAnimatedClose = () => {
+    setIsClosing(true);
+    setIsOpen(false);
+    setTimeout(() => onClose(), 250);
+  };
 
   const handleProcessCheckout = async () => {
     if (items.length === 0) return;
     setIsSubmitting(true);
     try {
-      let finalName = customerName;
-      let finalPhone = customerPhone;
-
-      if (selectedKhataCustomer) {
-        finalName = selectedKhataCustomer.customer_name;
-        finalPhone = selectedKhataCustomer.phone;
-      } else if (showNewCustInput && newCustomerName.trim()) {
-        finalName = newCustomerName.trim();
-        finalPhone = newCustomerPhone.trim();
-      }
-
       const checkoutPayload = {
-        invoice_number: `INV-${Date.now().toString().slice(-6)}`,
+        invoice_number: `ORD-2026-${Math.floor(100 + Math.random() * 900)}`,
         items: items.map((i) => ({
-          product_id: i.id, product_name: i.name, quantity: i.quantity,
-          unit_price: i.price, discount: i.discount, line_total: i.price * i.quantity * (1 - i.discount / 100)
+          product_id: i.id, product_name: i.name, price: i.price, unit_price: i.price, quantity: i.quantity,
+          discount: i.discount, line_total: i.price * i.quantity * (1 - i.discount / 100)
         })),
-        total_amount: total, discount: 0, tax: 0,
-        payment_mode: paymentMode,
-        cashier_name: cashierName || 'Tariq Cashier',
-        customer_phone: finalPhone || '03000000000',
-        cash_paid: parsedTendered, cash_change: calculatedChange,
+        amount_paid: total, total_amount: total, amount_tendered: tendered, cash_paid: tendered, cash_change: changeDue,
+        discount: discountTotal(), tax: 0, payment_mode: paymentMethod, cashier_name: currentCashier, customer_phone: '03000000000',
       };
 
+      // 1. Process Checkout
       const res = await posCheckout(checkoutPayload);
-      setReceiptData({
-        invoice_number: res.invoice_number || checkoutPayload.invoice_number,
-        items: checkoutPayload.items,
-        subtotal: total, discount_total: 0, tax_total: 0, grand_total: total,
-        cash_paid: parsedTendered, cash_change: calculatedChange,
-        payment_mode: paymentMode, customer_name: finalName, customer_phone: finalPhone,
-        cashier_name: checkoutPayload.cashier_name,
-      });
+      const invoiceNum = res.invoice_number || checkoutPayload.invoice_number;
+
+      const printPayload = {
+        invoice_number: invoiceNum,
+        items: checkoutPayload.items, subtotal: subtotal(), discount_total: discountTotal(),
+        tax_total: 0, grand_total: total, cash_paid: tendered, cash_change: changeDue,
+        payment_mode: paymentMethod, customer_name: 'Walk-in Customer', customer_phone: '',
+        cashier_name: currentCashier,
+      };
+
+      // 2. Direct Raw Print to Speed-X printer
+      try {
+        await fetch(`${API_URL}/printer/print-receipt`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(printPayload),
+        });
+      } catch (printErr) {
+        console.error('Direct print error:', printErr);
+      }
+
+      // 3. Play Success Audio Chime & White Toast
+      playToastAudio('print');
+      showCatalogToast('Bill printed & checkout completed!', 'add');
+
+      // 4. Clear Cart & Close Modal without opening additional page/modal
+      clearCart();
+      handleAnimatedClose();
     } catch (err: any) {
-      alert(`Checkout Notice: ${err.message || 'Error processing transaction'}`);
+      showProfessionalAlert(err.message || 'Error processing transaction', 'Checkout Notice');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const previewReceipt = {
+    invoice_number: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
+    items: items.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, line_total: i.price * i.quantity * (1 - (i.discount || 0) / 100) })),
+    subtotal: subtotal(),
+    discount_total: discountTotal(),
+    grand_total: total,
+    cash_paid: tendered,
+    cash_change: changeDue,
+    payment_mode: paymentMethod,
+    customer_name: 'Walk-in Customer',
+    cashier_name: currentCashier
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-        <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
-          <h3 className="font-bold text-slate-900 text-sm">POS Payment Checkout</h3>
-          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg transition cursor-pointer"><X className="w-4 h-4" /></button>
-        </div>
-
-        <div className="p-4 flex flex-col gap-3 max-h-[75vh] overflow-y-auto">
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex justify-between items-center font-mono">
-            <span className="text-xs font-bold text-emerald-900">Total Payable Amount</span>
-            <span className="text-xl font-bold text-emerald-700">{formatCurrency(total)}</span>
-          </div>
-
-          <PaymentModeButtons paymentMode={paymentMode} setPaymentMode={setPaymentMode} />
-
-          {paymentMode === 'KHATA' && (
-            <PaymentCustomerSelect
-              customerSearch={customerSearch} setCustomerSearch={setCustomerSearch}
-              filteredKhatas={filteredKhatas} selectedKhataCustomer={selectedKhataCustomer}
-              setSelectedKhataCustomer={setSelectedKhataCustomer} showNewCustInput={showNewCustInput}
-              setShowNewCustInput={setShowNewCustInput} newCustomerName={newCustomerName}
-              setNewCustomerName={setNewCustomerName} newCustomerPhone={newCustomerPhone}
-              setNewCustomerPhone={setNewCustomerPhone}
-            />
-          )}
-
-          <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-            <div>
-              <label className="block text-slate-600 font-bold mb-1 font-sans">Tendered Amount</label>
-              <input type="number" className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg font-bold text-slate-900" value={parsedTendered} onChange={(e) => setTenderedAmount(e.target.value)} />
+    <div
+      onClick={handleAnimatedClose}
+      className={`fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 font-sans transition-opacity duration-300 ${
+        isOpen && !isClosing ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className={`bg-white rounded-2xl shadow-2xl border border-slate-300 w-full max-w-4xl flex flex-col overflow-hidden transition-all duration-300 ease-out ${
+          isOpen && !isClosing ? 'scale-100 translate-y-0 opacity-100' : 'scale-95 translate-y-6 opacity-0'
+        }`}
+      >
+        {/* Header */}
+        <div className="p-4 bg-[#377462] text-white flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8  text-white flex items-center justify-center font-bold text-sm">
             </div>
             <div>
-              <label className="block text-slate-600 font-bold mb-1 font-sans">Change Due</label>
-              <div className="px-3 py-2 bg-slate-100 border border-slate-200 rounded-lg font-bold text-emerald-700">{formatCurrency(calculatedChange)}</div>
+              <h3 className="font-bold text-base leading-none text-white tracking-wide">Complete Payment & Print Bill</h3>
             </div>
           </div>
-        </div>
-
-        <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-          <button onClick={onClose} className="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-bold text-xs cursor-pointer">Cancel</button>
-          <button onClick={handleProcessCheckout} disabled={isSubmitting} className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
-            <span>{isSubmitting ? 'Processing...' : 'Complete Payment'}</span>
-            <ArrowRight className="w-4 h-4" />
+          <button onClick={handleAnimatedClose} className="p-1.5 text-emerald-200 hover:text-green- rounded-lg cursor-pointer transition">
+            <X className="w-5 h-5" />
           </button>
         </div>
-      </div>
 
-      {receiptData && (
-        <ThermalReceiptModal receiptData={receiptData} onClose={() => { setReceiptData(null); clearCart(); onClose(); }} />
-      )}
+        {/* Content */}
+        <div className="p-5 bg-slate-50 grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
+          {/* Left Controls */}
+          <div className="flex flex-col gap-4">
+          
+            {/* Net Payable Banner */}
+            <div className="bg-gray-200 rounded-xl p-4 border  flex items-center justify-between text-white shadow-sm ">
+              <span className="text-xs font-semibold uppercase tracking-wider font-sans text-black">Net Payable:</span>
+              <span className="text-2xl font-bold font-mono text-black">{formatCurrency(total)}</span>
+            </div>
+            <button
+              onClick={handleProcessCheckout}
+              disabled={isSubmitting}
+              className=" w-full bg-[#e1e4e3] hover:bg-[#c8cbca] active:scale-[0.99] text-black py-3.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 shadow-lg cursor-pointer transition tracking-wide"
+            >
+              <Printer className="w-5 h-5 text-emerald-400" />
+              <span>{isSubmitting ? 'Processing Transaction...' : 'Validate & Print Bill'}</span>
+            </button>
+          </div>
+
+          {/* Right Receipt Live Preview */}
+          <div className="bg-slate-200 p-3.5 rounded-xl border border-slate-300 flex justify-center max-h-[70vh] overflow-y-auto">
+            <ThermalReceiptContent receiptData={previewReceipt} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

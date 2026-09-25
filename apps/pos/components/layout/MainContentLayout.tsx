@@ -1,23 +1,30 @@
 'use client';
 
 import React from 'react';
-import { usePathname } from 'next/navigation';
+import Header from './Header';
+import Sidebar from './Sidebar';
+import CatalogToast from '../inventory/CatalogToast';
+import ProfessionalAlertModal from './ProfessionalAlertModal';
 
 export default function MainContentLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  const isPosPage = pathname === '/';
-
-  if (isPosPage) {
-    return (
-      <div className="h-[calc(100vh-3.5rem)] xl:pl-16 mt-14 overflow-hidden w-full select-none bg-slate-100">
-        {children}
-      </div>
-    );
-  }
-
   return (
-    <div className="h-[calc(100vh-3.5rem)] xl:pl-16 mt-14 overflow-y-auto p-3 sm:p-4 lg:p-6 w-full bg-slate-100">
-      {children}
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#f8fafc] text-slate-800 antialiased font-sans">
+      {/* 1. Header (Brand Header) */}
+      <Header />
+
+      {/* 2. Main Workspace (Sidebar + Page Content) */}
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        <Sidebar />
+        <main className="flex-1 overflow-y-auto min-w-0 bg-[#f8fafc] flex flex-col">
+          {children}
+        </main>
+      </div>
+
+      {/* 3. Global Bottom-Right Catalog Action Animated Toast */}
+      <CatalogToast />
+
+      {/* 4. Global Centered Professional Alert Modal */}
+      <ProfessionalAlertModal />
     </div>
   );
 }

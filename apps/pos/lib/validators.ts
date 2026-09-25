@@ -54,26 +54,32 @@ export const EmployeeCreateSchema = z.object({
 });
 
 export const POSOrderItemSchema = z.object({
-  product_id: z.string(),
-  product_name: z.string(),
-  price: z.number().nonnegative(),
-  unit_price: z.number().nonnegative().optional(),
-  cost_price: z.number().nonnegative().optional().default(0),
-  quantity: z.number().int().positive('Quantity must be at least 1'),
-  discount_percentage: z.number().min(0).max(100).optional().default(0),
+  product_id: z.string().optional().default(''),
+  product_name: z.string().optional().default('Item'),
+  price: z.number().optional().default(0),
+  unit_price: z.number().optional().default(0),
+  cost_price: z.number().optional().default(0),
+  quantity: z.number().optional().default(1),
+  discount_percentage: z.number().optional().default(0),
+  discount: z.number().optional().default(0),
+  line_total: z.number().optional().default(0),
 });
 
 export const POSCheckoutSchema = z.object({
   store_id: z.string().nullable().optional().default('store-1'),
   cashier_name: z.string().nullable().optional().default('Cashier'),
-  customer_phone: z.string().nullable().optional(),
+  customer_phone: z.string().nullable().optional().default(''),
   customer_name: z.string().nullable().optional().default('Customer'),
-  payment_mode: z.string().default('CASH'),
+  payment_mode: z.string().optional().default('CASH'),
   tax_percentage: z.number().optional().default(0),
-  amount_paid: z.number().nonnegative(),
-  amount_tendered: z.number().nonnegative().optional(),
+  amount_paid: z.number().optional().default(0),
+  total_amount: z.number().optional().default(0),
+  amount_tendered: z.number().optional().default(0),
+  cash_paid: z.number().optional().default(0),
+  cash_change: z.number().optional().default(0),
   order_note: z.string().nullable().optional(),
-  items: z.array(POSOrderItemSchema).min(1, 'Cart cannot be empty'),
+  invoice_number: z.string().optional(),
+  items: z.array(POSOrderItemSchema).optional().default([]),
 });
 
 export const BillingRecordSchema = z.object({

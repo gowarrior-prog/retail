@@ -3,6 +3,7 @@ from app.routers.auth import router as auth_router
 from app.routers.employees import router as employees_router
 from app.routers.billing import router as billing_router
 from app.routers.admin import router as admin_router
+from app.routers.printer import router as printer_router
 
 __all__ = [
     "catalog_router",
@@ -10,4 +11,6 @@ __all__ = [
     "employees_router",
     "billing_router",
     "admin_router",
+    "printer_router",
 ]
+

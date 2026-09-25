@@ -377,9 +377,16 @@ def get_all_local_khata() -> list:
     return rows
 
 def delete_local_khata(cust_id: str):
-    conn = sqlite3.connect(get_sqlite_path())
+    conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM local_khata WHERE id = ?", (cust_id,))
+    conn.commit()
+    conn.close()
+
+def clear_all_local_khata():
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_khata")
     conn.commit()
     conn.close()
 

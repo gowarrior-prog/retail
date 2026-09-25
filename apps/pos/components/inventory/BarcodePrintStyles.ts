@@ -30,8 +30,10 @@ export function generateStickerPrintHtml(params: {
         ${showShopName ? `<div class="shop-name">${shopName}</div>` : ''}
         <div class="product-title">${productName}</div>
         <img class="barcode-img" src="${canvasDataUrl}" alt="Barcode" />
-        <div class="barcode-text">${barcodeValue}</div>
-        ${showPrice ? `<div class="price">${priceFormatted}</div>` : ''}
+        <div class="footer-row">
+          <span class="barcode-text">${barcodeValue}</span>
+          ${showPrice ? `<span class="price">${priceFormatted}</span>` : ''}
+        </div>
       </div>
     `;
   }
@@ -43,35 +45,94 @@ export function generateStickerPrintHtml(params: {
         <meta charset="utf-8" />
         <title>Print Barcode Stickers</title>
         <style>
-          @page { size: ${labelWidthMm}mm ${labelHeightMm}mm; margin: 0 !important; }
-          * { box-sizing: border-box; margin: 0; padding: 0; font-family: Arial, sans-serif; }
-          body { width: ${labelWidthMm}mm; background: #fff; text-align: center; }
+          @page {
+            size: ${labelWidthMm}mm ${labelHeightMm}mm;
+            margin: 0 !important;
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          html, body {
+            width: ${labelWidthMm}mm;
+            height: ${labelHeightMm}mm;
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            -webkit-print-color-adjust: exact;
+          }
           .sticker-card {
             width: ${labelWidthMm}mm;
             height: ${labelHeightMm}mm;
-            padding: 1.5mm 2mm;
+            padding: 1.2mm 2mm;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             align-items: center;
-            page-break-after: always;
             overflow: hidden;
+            background: #ffffff;
+            box-sizing: border-box;
           }
-          .shop-name { font-size: ${shopFontSizePt}pt; font-weight: bold; color: #111; line-height: 1.1; }
-          .product-title { font-size: ${titleFontSizePt}pt; font-weight: 800; color: #000; line-height: 1.1; margin-top: 1px; }
+          .sticker-card:not(:last-child) {
+            page-break-after: always;
+            break-after: page;
+          }
+          .shop-name {
+            font-size: ${shopFontSizePt}pt;
+            font-weight: bold;
+            color: #000;
+            line-height: 1.1;
+            text-align: center;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          .product-title {
+            font-size: ${titleFontSizePt}pt;
+            font-weight: 800;
+            color: #000;
+            line-height: 1.1;
+            text-align: center;
+            width: 100%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 0.5px;
+          }
           .barcode-img {
             width: ${barcodeWidthMm}mm;
             height: ${barcodeHeightMm}mm;
             max-height: ${barcodeHeightMm}mm;
-            object-fit: contain;
+            object-fit: fill;
             display: block;
-            margin: 0 auto;
+            margin: 1px auto;
           }
-          .barcode-text { font-size: ${barcodeTextFontSizePt}pt; font-family: monospace; font-weight: bold; letter-spacing: 0.5px; }
-          .price { font-size: ${priceFontSizePt}pt; font-weight: bold; align-self: flex-end; }
+          .footer-row {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 0.5px;
+            padding: 0 1mm;
+          }
+          .barcode-text {
+            font-size: ${barcodeTextFontSizePt}pt;
+            font-family: 'Courier New', Courier, monospace;
+            font-weight: 900;
+            color: #000;
+            letter-spacing: 0.5px;
+          }
+          .price {
+            font-size: ${priceFontSizePt}pt;
+            font-weight: 900;
+            color: #000;
+          }
         </style>
       </head>
-      <body onload="window.print(); window.close();">
+      <body onload="setTimeout(function(){ window.print(); window.close(); }, 150);">
         ${stickersHtml}
       </body>
     </html>

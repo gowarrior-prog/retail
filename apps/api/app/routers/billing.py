@@ -1,5 +1,7 @@
 import uuid
 import json
+from typing import List, Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -16,6 +18,8 @@ from app.services.sqlite_sync_service import (
     mark_bill_as_synced,
     save_khata_locally,
     get_all_local_khata,
+    delete_local_khata,
+    clear_all_local_khata,
     get_pending_local_bills,
     restock_local_product_stock
 )
@@ -100,6 +104,89 @@ async def get_khata_records(db: AsyncSession = Depends(get_db3)):
             pass
 
     return list(local_map.values())
+
+
+class AddKhataRequest(BaseModel):
+    customer_name: str
+    phone: str
+    initial_balance: float = 0.0
+
+@router.post("/khata/add")
+async def add_khata_customer(req: AddKhataRequest, db: AsyncSession = Depends(get_db3)):
+    """Creates a new Khata customer account in local SQLite and DB3 Finance database."""
+    cust_id = str(uuid.uuid4())
+    save_khata_locally(
+        cust_id=cust_id, odoo_id=None,
+        name=req.customer_name, phone=req.phone,
+        email=None, balance=req.initial_balance
+    )
+    try:
+        if db is not None:
+            khata = CustomerKhataModel(
+                id=cust_id, customer_name=req.customer_name,
+                phone=req.phone, total_balance=req.initial_balance
+            )
+            db.add(khata)
+            await db.commit()
+    except Exception as err:
+        print(f"Notice: Khata cloud save notice: {err}")
+
+    return {
+        "status": "success",
+        "id": cust_id,
+        "customer_name": req.customer_name,
+        "phone": req.phone,
+        "total_balance": req.initial_balance,
+        "message": "New Khata customer added successfully!"
+    }
+
+
+@router.delete("/khata/clear-all")
+async def clear_all_khata_records(db: AsyncSession = Depends(get_db3)):
+    """Deletes all Khata records permanently from SQLite and DB3 database."""
+    clear_all_local_khata()
+    try:
+        if db is not None:
+            await db.execute(CustomerKhataModel.__table__.delete())
+            await db.commit()
+    except Exception as e:
+        print(f"Notice: DB3 clear exception: {e}")
+    return {"status": "success", "message": "All Khata records permanently deleted."}
+
+
+@router.delete("/khata/{cust_id}")
+async def delete_khata_record(cust_id: str, db: AsyncSession = Depends(get_db3)):
+    """Deletes a specific Khata customer record from SQLite and DB3."""
+    delete_local_khata(cust_id)
+    try:
+        if db is not None:
+            res = await db.execute(select(CustomerKhataModel).filter(CustomerKhataModel.id == cust_id))
+            rec = res.scalars().first()
+            if rec:
+                await db.delete(rec)
+                await db.commit()
+    except Exception as e:
+        print(f"Notice: DB3 delete exception: {e}")
+    return {"status": "success", "id": cust_id, "message": "Khata record deleted successfully."}
+
+
+class DeleteKhataRequest(BaseModel):
+    id: str
+
+@router.post("/khata/delete")
+async def delete_khata_record_post(req: DeleteKhataRequest, db: AsyncSession = Depends(get_db3)):
+    """POST fallback for deleting a Khata record from SQLite and DB3."""
+    delete_local_khata(req.id)
+    try:
+        if db is not None:
+            res = await db.execute(select(CustomerKhataModel).filter(CustomerKhataModel.id == req.id))
+            rec = res.scalars().first()
+            if rec:
+                await db.delete(rec)
+                await db.commit()
+    except Exception as e:
+        print(f"Notice: DB3 delete exception: {e}")
+    return {"status": "success", "id": req.id, "message": "Khata record deleted successfully."}
 
 
 @router.get("/purchases")

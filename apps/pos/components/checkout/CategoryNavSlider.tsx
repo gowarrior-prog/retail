@@ -1,121 +1,100 @@
 'use client';
-import { useRef, useState } from 'react';
-import { UserCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useProductStore } from '@/stores/useProductStore';
-import CashierSelectModal from './CashierSelectModal';
-import { useCartStore } from '@/stores/useCartStore';
 
-const CATEGORIES = [
-  'All Items',
-  'Shawls',
-  'Abaya',
-  'Cotton Karandi',
-  'Lawn Collection',
+import { useRef } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useProductStore } from '@/stores/useProductStore';
+
+const CATEGORY_NAMES = [
+  'ALL Items',
+  'Unstitched Suits',
+  'Shawls & Wool',
+  'Kurta & Shalwar',
+  'Silk & Fabrics',
   'Embroidery',
-  'Gents',
-  'Pashmina',
-  'Velvet',
-  'Fancy Silk',
-  'Winter Wear',
-  'Accessories'
+  'Gents Collection',
+  'Fancy & Bridal',
 ];
 
-export interface Cashier {
-  id: string;
-  name: string;
-  role: string;
+interface CategoryNavSliderProps {
+  onOpenHoldModal: () => void;
 }
 
-export default function CategoryNavSlider() {
-  const { selectedCategory, setCategory } = useProductStore();
-  const { cashierName, setCashierName } = useCartStore();
-  
-  const [showCashierModal, setShowCashierModal] = useState(false);
+export default function CategoryNavSlider({ onOpenHoldModal }: CategoryNavSliderProps) {
+  const { selectedCategory, setCategory, searchQuery, setSearchQuery } = useProductStore();
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const scrollLeft = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: -200, behavior: 'smooth' });
-    }
-  };
-
-  const scrollRight = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollBy({ left: 200, behavior: 'smooth' });
-    }
-  };
-
-  const handleCashierSelect = (cashier: Cashier) => {
-    setCashierName(cashier.name);
-    setShowCashierModal(false);
-  };
+  const scrollLeft = () => scrollRef.current?.scrollBy({ left: -200, behavior: 'smooth' });
+  const scrollRight = () => scrollRef.current?.scrollBy({ left: 200, behavior: 'smooth' });
 
   return (
-    <div className="flex flex-col shrink-0 bg-slate-50 border-b border-slate-200">
-      {/* Category Filter Pills Bar with Cashier btn on left */}
-      <div className="px-1 py-1.5 bg-white border-b border-slate-200 flex items-center gap-1 shrink-0">
-        
-        {/* Cashier Button - Left Side */}
-        <button
-          onClick={() => setShowCashierModal(true)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg shadow-sm cursor-pointer transition-all active:scale-95 shrink-0"
-        >
-          <UserCircle2 className="w-4 h-4 text-emerald-400" />
-          <span className="text-[11px] font-bold whitespace-nowrap hidden sm:inline">
-            {cashierName || 'Cashier'}
-          </span>
+    <div className="flex flex-col gap-3 font-sans shrink-0">
+      {/* Top Search Input & Action Buttons Bar */}
+      <div className="flex items-center gap-3">
+        {/* Search Bar Input */}
+        <div className="relative flex-1">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Scan barcode or enter SKU / Item name..."
+            className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1b3830] focus:border-[#1b3830] transition-all font-medium shadow-2xs"
+          />
+        </div>
+
+        {/* Filters Button */}
+        <button className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-700 flex items-center cursor-pointer shadow-2xs transition-all active:scale-95 shrink-0">
+          Filters
         </button>
 
-        <div className="h-5 w-px bg-slate-200 mx-0.5 shrink-0" />
+        {/* Pure Text Light Mint BILL HISTORY Button (No Numbers/Icons) */}
+        <button
+          onClick={onOpenHoldModal}
+          className="px-4 py-2.5 bg-[#ebf2ee] hover:bg-[#e0eae4] active:scale-95 text-[#1b3830] border border-[#d2dfd8] rounded-xl text-xs font-extrabold tracking-wide uppercase flex items-center justify-center cursor-pointer shadow-2xs transition-all duration-200 shrink-0"
+        >
+          BILL HISTORY
+        </button>
+      </div>
 
-        {/* Scroll Left */}
-        <button 
+      {/* Category Filter Pills Row (Pure Clean Titles without Fake Numbers) */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <button
           onClick={scrollLeft}
           className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-slate-200 rounded-full shrink-0 transition cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
 
-        {/* Scrollable Category Pills */}
-        <div 
+        <div
           ref={scrollRef}
-          className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar scroll-smooth"
+          className="flex-1 flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth py-0.5"
         >
-          {CATEGORIES.map((cat) => {
+          {CATEGORY_NAMES.map((name) => {
             const isSelected =
-              selectedCategory === cat || (cat === 'All Items' && (selectedCategory === 'All' || !selectedCategory));
+              selectedCategory === name ||
+              (name === 'ALL Items' && (!selectedCategory || selectedCategory === 'All'));
             return (
               <button
-                key={cat}
-                onClick={() => setCategory(cat === 'All Items' ? 'All' : cat)}
-                className={`px-3 py-1 rounded-full font-semibold whitespace-nowrap transition-all duration-200 transform active:scale-95 cursor-pointer text-xs ${
+                key={name}
+                onClick={() => setCategory(name === 'ALL Items' ? 'All' : name)}
+                className={`px-3.5 py-1.5 rounded-lg font-bold text-xs whitespace-nowrap transition-all duration-150 cursor-pointer flex items-center justify-center active:scale-95 ${
                   isSelected
-                    ? 'bg-slate-900 text-white shadow-xs'
-                    : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-200 shadow-2xs'
+                    ? 'bg-[#1b3830] text-white shadow-2xs'
+                    : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs'
                 }`}
               >
-                {cat}
+                {name}
               </button>
             );
           })}
         </div>
 
-        {/* Scroll Right */}
-        <button 
+        <button
           onClick={scrollRight}
           className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-slate-200 rounded-full shrink-0 transition cursor-pointer"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
       </div>
-
-      {showCashierModal && (
-        <CashierSelectModal
-          currentCashierId={null}
-          onSelect={handleCashierSelect}
-          onClose={() => setShowCashierModal(false)}
-        />
-      )}
     </div>
   );
 }

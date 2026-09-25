@@ -45,3 +45,31 @@ export async function posSalesReturn(data: {
     body: JSON.stringify(data),
   });
 }
+
+export async function createKhataCustomer(data: {
+  customer_name: string;
+  phone: string;
+  initial_balance?: number;
+}): Promise<any> {
+  return await apiFetch<any>('/khata/add', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteKhataCustomer(id: string): Promise<any> {
+  try {
+    return await apiFetch<any>('/khata/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    return await apiFetch<any>(`/khata/${id}`, { method: 'DELETE' });
+  }
+}
+
+export async function clearAllKhataRecords(): Promise<any> {
+  return await apiFetch<any>('/khata/clear-all', {
+    method: 'DELETE',
+  });
+}

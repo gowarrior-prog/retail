@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { apiFetch } from './client';
+import { apiFetch, getApiBaseUrl } from './client';
 import { ProductSchema, ProductCreateSchema } from '../validators';
 
 export type Product = z.infer<typeof ProductSchema>;
@@ -11,10 +11,27 @@ export async function fetchProducts(): Promise<Product[]> {
       return z.array(ProductSchema.partial()).parse(raw) as Product[];
     }
     return [];
-  } catch (err) {
-    console.warn('[API] fetchProducts notice:', err);
+  } catch {
     return [];
   }
+}
+
+export async function uploadProductImage(file: File): Promise<string> {
+  const apiBase = getApiBaseUrl();
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const res = await fetch(`${apiBase}/upload-image`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    throw new Error('Image upload failed');
+  }
+
+  const data = await res.json();
+  return data.image_url || data.url || data.file_path || '';
 }
 
 export async function createProduct(data: any): Promise<Product> {
