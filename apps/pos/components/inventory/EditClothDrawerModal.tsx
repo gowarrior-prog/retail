@@ -113,8 +113,7 @@ export default function EditClothDrawerModal({ product, onClose }: EditClothDraw
         <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col overflow-hidden transition-transform duration-300 ease-out ${isOpen && !isClosing ? 'translate-x-0' : 'translate-x-full'}`}>
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <div>
-              <h3 className="font-extrabold text-slate-800 text-sm leading-none">Edit Product Details</h3>
-              <p className="text-[10px] text-slate-500 font-medium mt-1">Update cloth specs, pricing or stock</p>
+              <h3 className="font-bold text-slate-800">Edit Product Details</h3>
             </div>
             <button onClick={handleAnimatedClose} className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200 cursor-pointer">
               <X className="w-4 h-4" />
@@ -123,7 +122,7 @@ export default function EditClothDrawerModal({ product, onClose }: EditClothDraw
 
           <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-3 min-h-0">
             <div>
-              <label className="text-[10.5px] font-bold text-slate-600 block mb-1">Cloth Picture / Image</label>
+              <label className="text-[10.5px] font-bold text-slate-600 block mb-1">Cloth Image</label>
               <div className="relative border-2 border-dashed border-slate-200 rounded-2xl p-3 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center text-center overflow-hidden cursor-pointer">
                 <input type="file" accept="image/*" onChange={handleImageFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
                 {imageUrl ? (
@@ -138,13 +137,13 @@ export default function EditClothDrawerModal({ product, onClose }: EditClothDraw
             </div>
 
             <div>
-              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Cloth / Fabric Title *</label>
+              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Fabric Title</label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900" />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <AnimatedSelect
-                label="Fabric Category *"
+                label="Fabric Category"
                 options={CATEGORY_OPTIONS}
                 value={category}
                 onChange={setCategory}
@@ -159,7 +158,7 @@ export default function EditClothDrawerModal({ product, onClose }: EditClothDraw
             </div>
 
             <div>
-              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Barcode / SKU *</label>
+              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Barcode</label>
               <div className="flex gap-2">
                 <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900" />
                 <button type="button" onClick={() => setShowPrintModal(true)} className="px-4 py-2 bg-[#e0e3e2] hover:bg-[#d4d4d4] active:scale-[0.99] text-black rounded-xl text-xs font-extrabold shadow-2xs cursor-pointer transition">
@@ -169,7 +168,7 @@ export default function EditClothDrawerModal({ product, onClose }: EditClothDraw
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase font-mono block">PRICING & MARGINS (PKR)</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase font-mono block">PRICING & MARGINS</span>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Cost Price</label>
@@ -183,7 +182,7 @@ export default function EditClothDrawerModal({ product, onClose }: EditClothDraw
             </div>
 
             <div>
-              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Stock Qty *</label>
+              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Stock Qty</label>
               <input type="number" value={stock} onChange={(e) => setStock(parseInt(e.target.value) || 0)} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900" />
             </div>
           </div>
@@ -192,7 +191,7 @@ export default function EditClothDrawerModal({ product, onClose }: EditClothDraw
             <button onClick={() => setShowDeleteConfirm(true)} className="px-3.5 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition cursor-pointer">
               <Trash2 className="w-4 h-4" /> Delete
             </button>
-            <button onClick={handleUpdateCloth} disabled={isSubmitting} className="px-5 py-2.5 bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] text-white rounded-xl font-extrabold text-xs flex items-center gap-2 shadow cursor-pointer">
+            <button onClick={handleUpdateCloth} disabled={isSubmitting} className="px-5 py-2.5 bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow cursor-pointer">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
               <span>{isSubmitting ? 'Updating...' : 'Update Product'}</span>
             </button>

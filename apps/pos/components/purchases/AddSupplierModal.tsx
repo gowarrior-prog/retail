@@ -1,17 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, UserPlus, Phone, DollarSign } from 'lucide-react';
-import { createKhataCustomer } from '@/lib/api';
+import { X, Truck, Phone, DollarSign } from 'lucide-react';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
 
-interface AddKhataModalProps {
+interface AddSupplierModalProps {
   onClose: () => void;
-  onSuccess: (newCust: any) => void;
+  onSuccess: (newSupplier: any) => void;
 }
 
-export default function AddKhataModal({ onClose, onSuccess }: AddKhataModalProps) {
+export default function AddSupplierModal({ onClose, onSuccess }: AddSupplierModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [name, setName] = useState('');
@@ -34,17 +33,53 @@ export default function AddKhataModal({ onClose, onSuccess }: AddKhataModalProps
     if (!name.trim()) return;
     setIsSubmitting(true);
     try {
-      const res = await createKhataCustomer({
-        customer_name: name.trim(),
+      const initials = name
+        .trim()
+        .split(' ')
+        .map((n) => n[0])
+        .join('')
+        .slice(0, 2)
+        .toUpperCase();
+      const bal = Number(balance) || 0;
+
+      const newSupplier = {
+        id: `sup-${Date.now()}`,
+        supplier_name: name.trim(),
         phone: phone.trim() || '0300-0000000',
-        initial_balance: Number(balance) || 0,
-      });
+        since: 'Active',
+        total_purchases: bal > 0 ? 1 : 0,
+        total_balance: bal,
+        time_ago: 'Just added',
+        initials,
+        avatar_color: 'bg-[#1b3830]',
+        ledger:
+          bal > 0
+            ? [
+                {
+                  id: `leg-sup-init-${Date.now()}`,
+                  date: new Date().toLocaleDateString('en-GB', {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  }),
+                  bill_number: `INV-OPEN-${Math.floor(100 + Math.random() * 900)}`,
+                  description: 'Opening Stock Balance',
+                  type: 'Purchase',
+                  purchase_amount: bal,
+                  paid_amount: 0,
+                  balanceText: `Rs. ${bal.toLocaleString()} PAYABLE`,
+                  is_due: true,
+                },
+              ]
+            : [],
+      };
+
       playToastAudio('add');
-      showCatalogToast('New Khata Client Created!', 'add');
-      onSuccess(res);
+      showCatalogToast(`New Supplier '${name.trim()}' Created!`, 'add');
+      onSuccess(newSupplier);
       handleAnimatedClose();
     } catch (err: any) {
-      alert(`Notice: ${err.message || 'Error creating Khata client'}`);
+      alert(`Notice: ${err.message || 'Error creating supplier'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -66,9 +101,10 @@ export default function AddKhataModal({ onClose, onSuccess }: AddKhataModalProps
         {/* Header */}
         <div className="p-4 bg-[#1b3830] text-white flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <UserPlus className="w-5 h-5 text-emerald-400" />
+            <Truck className="w-5 h-5 text-emerald-400" />
             <div>
-              <h3 className="font-bold text-sm leading-none text-white">Add New Client</h3>
+              <h3 className="font-bold text-sm leading-none text-white">Add New Supplier</h3>
+              <p className="text-[11px] text-emerald-200 mt-0.5">Wholesaler & Vendor Registration</p>
             </div>
           </div>
           <button onClick={handleAnimatedClose} className="p-1 text-emerald-200 hover:text-white rounded-lg cursor-pointer transition">
@@ -80,14 +116,14 @@ export default function AddKhataModal({ onClose, onSuccess }: AddKhataModalProps
         <form onSubmit={handleSubmit} className="p-4 bg-slate-50 flex flex-col gap-3.5">
           <div>
             <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              CUSTOMER NAME
+              SUPPLIER / WHOLESALER NAME
             </label>
             <input
               type="text"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Master Tariq Tailors / Haji Rafiq"
+              placeholder="e.g. Gul Ahmed Silk Mills / Haji Fabrics"
               className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
             />
           </div>
@@ -110,7 +146,7 @@ export default function AddKhataModal({ onClose, onSuccess }: AddKhataModalProps
 
           <div>
             <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              INITIAL BALANCE
+              INITIAL PAYABLE BALANCE (DUE TO SUPPLIER)
             </label>
             <div className="relative">
               <DollarSign className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -138,7 +174,7 @@ export default function AddKhataModal({ onClose, onSuccess }: AddKhataModalProps
               disabled={isSubmitting || !name.trim()}
               className="px-5 py-2 bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center shadow-xs transition cursor-pointer"
             >
-              <span>{isSubmitting ? 'Creating...' : 'Save Client'}</span>
+              <span>{isSubmitting ? 'Creating...' : 'Save Supplier'}</span>
             </button>
           </div>
         </form>

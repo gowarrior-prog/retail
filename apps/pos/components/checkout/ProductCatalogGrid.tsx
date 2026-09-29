@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Shirt } from 'lucide-react';
+import { Shirt, ShoppingBag } from 'lucide-react';
 import { useProductStore } from '@/stores/useProductStore';
 import { useCartStore } from '@/stores/useCartStore';
 
@@ -35,12 +35,10 @@ export default function ProductCatalogGrid() {
       {matchingItems.length === 0 ? (
         <div className="h-full min-h-[300px] flex flex-col items-center justify-center text-center p-6 text-slate-400">
           <div className="w-16 h-16 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mb-3">
-            <Shirt className="w-8 h-8 text-slate-300" />
+            <ShoppingBag className="w-8 h-8 text-slate-300" />
           </div>
           <p className="text-sm font-bold text-slate-700">No products found</p>
-          <p className="text-xs text-slate-400 max-w-xs mt-1">
-            Try searching with a different SKU, name, or barcode.
-          </p>
+          
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 pb-4">

@@ -117,7 +117,7 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
         <div onClick={(e) => e.stopPropagation()} className={`w-full max-w-md bg-white h-full shadow-2xl border-l border-slate-200 flex flex-col overflow-hidden transition-transform duration-300 ease-out ${isOpen && !isClosing ? 'translate-x-0' : 'translate-x-full'}`}>
           <div className="p-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
             <div>
-              <h3 className="font-extrabold text-slate-800 text-sm leading-none">+ Add New Fabric</h3>
+              <h3 className="font-bold text-slate-800 text-sm leading-none">+ Add New Fabric</h3>
             </div>
             <button onClick={handleAnimatedClose} className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200 cursor-pointer">
               <X className="w-4 h-4" />
@@ -126,7 +126,7 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
 
           <div className="p-4 flex-1 overflow-y-auto flex flex-col gap-3 min-h-0">
             <div>
-              <label className="text-[10.5px] font-bold text-slate-600 block mb-1">Cloth Picture / Image</label>
+              <label className="text-[10.5px] font-bold text-slate-600 block mb-1">Cloth Image</label>
               <div className="relative border-2 border-dashed border-slate-200 rounded-2xl p-3 bg-slate-50 hover:bg-slate-100 flex flex-col items-center justify-center text-center overflow-hidden cursor-pointer">
                 <input type="file" accept="image/*" onChange={handleImageFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
                 {imageUrl ? (
@@ -141,13 +141,13 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
             </div>
 
             <div>
-              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Cloth / Fabric Title *</label>
+              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Fabric Title</label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. GulAhmed Exclusive Egyptian Latha" className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-bold text-slate-900" />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <AnimatedSelect
-                label="Fabric Category *"
+                label="Fabric Category"
                 options={CATEGORY_OPTIONS}
                 value={category}
                 onChange={setCategory}
@@ -162,7 +162,7 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
             </div>
 
             <div>
-              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Barcode / SKU *</label>
+              <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Barcode</label>
               <div className="flex gap-2">
                 <input type="text" value={sku} onChange={(e) => setSku(e.target.value)} className="flex-1 px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900" />
                 <button type="button" onClick={handleCreateBarcodeSticker} className="px-4 py-2 bg-[#dae1e1] hover:bg-[#aeb7b4] active:scale-[0.99] text-black rounded-xl text-xs font-extrabold shadow-2xs cursor-pointer transition">
@@ -172,7 +172,7 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col gap-2">
-              <span className="text-[10px] font-black text-slate-400 uppercase font-mono block">PRICING & MARGINS (PKR)</span>
+              <span className="text-[10px] font-black text-slate-400 uppercase font-mono block">PRICING & MARGINS</span>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Cost Price</label>
@@ -191,7 +191,7 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Stock Qty *</label>
+                <label className="text-[10.5px] font-bold text-slate-700 block mb-1">Stock Qty</label>
                 <input type="number" value={stock} onChange={(e) => setStock(parseInt(e.target.value) || 0)} className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900" />
               </div>
               <div>
@@ -202,9 +202,9 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
           </div>
 
           <div className="p-3.5 bg-slate-50 border-t border-slate-200 shrink-0">
-            <button onClick={handleSaveCloth} disabled={isSubmitting} className="w-full bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] text-white py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 shadow cursor-pointer">
+            <button onClick={handleSaveCloth} disabled={isSubmitting} className="w-full bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow cursor-pointer">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>{isSubmitting ? 'Saving...' : 'Save & Add to Catalog'}</span>
+              <span>{isSubmitting ? 'Saving...' : 'Add to catalog'}</span>
             </button>
           </div>
         </div>

@@ -17,7 +17,7 @@ export default function BarcodeTemplateControls(props: BarcodeTemplateControlsPr
   return (
     <div className="flex flex-col gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/90 text-xs font-sans">
       <div className="text-[10px] font-mono uppercase tracking-wider font-extrabold text-slate-400 border-b border-slate-200 pb-1.5">
-        Sticker Content & Print Dimensions (Editable)
+        Sticker Content
       </div>
 
       {/* Row 1: Editable Text Content */}
@@ -31,11 +31,11 @@ export default function BarcodeTemplateControls(props: BarcodeTemplateControlsPr
           <input type="text" className="w-full h-8 px-2.5 rounded-xl border border-slate-300 bg-white font-bold text-slate-900 focus:outline-none focus:border-[#1b3830]" value={props.productName} onChange={(e) => props.setProductName(e.target.value)} />
         </div>
         <div>
-          <label className="block text-slate-700 font-bold mb-1">SKU / Barcode Code</label>
+          <label className="block text-slate-700 font-bold mb-1">Barcode Code</label>
           <input type="text" className="w-full h-8 px-2.5 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-900 focus:outline-none focus:border-[#1b3830]" value={props.barcodeVal} onChange={(e) => props.setBarcodeVal(e.target.value)} />
         </div>
         <div>
-          <label className="block text-slate-700 font-bold mb-1">Retail Price (PKR)</label>
+          <label className="block text-slate-700 font-bold mb-1">Retail Price</label>
           <input type="number" className="w-full h-8 px-2.5 rounded-xl border border-slate-300 bg-white font-mono font-bold text-slate-900 focus:outline-none focus:border-[#1b3830]" value={props.priceVal} onChange={(e) => props.setPriceVal(Number(e.target.value) || 0)} />
         </div>
       </div>

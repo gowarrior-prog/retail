@@ -24,8 +24,8 @@ export default function ThermalReceiptModal(props: any) {
       });
       const data = await res.json();
       if (data.status === 'success') {
-        setPrintResult('✅ Bill printed & auto-cut!');
-      } else {
+      }
+       else {
         setPrintResult(`❌ ${data.message || 'Print failed'}`);
       }
     } catch (err: any) {

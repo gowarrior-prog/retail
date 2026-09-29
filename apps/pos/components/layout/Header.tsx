@@ -51,7 +51,7 @@ export default function Header() {
           <div className="w-8 h-8 rounded-full border border-slate-300 flex items-center justify-center bg-slate-50 text-slate-700 font-bold shadow-2xs">
             <span className="text-[11px] font-black tracking-tighter">BC</span>
           </div>
-          <span className="font-extrabold text-sm tracking-tight text-slate-800 uppercase font-sans">
+          <span className="font-bold text-sm tracking-tight text-slate-800 uppercase font-sans">
             BILAL CLOTH & SILK CENTER
           </span>
         </div>

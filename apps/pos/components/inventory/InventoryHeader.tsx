@@ -12,15 +12,7 @@ interface InventoryHeaderProps {
 export default function InventoryHeader({ onSyncOdoo, isSyncing, onOpenAddModal }: InventoryHeaderProps) {
   return (
     <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between font-sans">
-      <div>
-        <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-          <Package className="w-5.5 h-5.5 text-emerald-600" />
-          Stock & Fabric Inventory
-        </h1>
-        <p className="text-xs text-slate-500 mt-0.5 font-medium">
-          Manage fabric catalog, SKU codes, prices, barcode sticker printing, and Odoo ERP sync
-        </p>
-      </div>
+
 
       <div className="flex items-center gap-2">
         <button

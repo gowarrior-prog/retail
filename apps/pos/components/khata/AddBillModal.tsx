@@ -9,7 +9,7 @@ import { playToastAudio } from '@/lib/toastAudio';
 interface AddBillModalProps {
   client: any;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (info?: any) => void;
 }
 
 export default function AddBillModal({ client, onClose, onSuccess }: AddBillModalProps) {
@@ -41,7 +41,7 @@ export default function AddBillModal({ client, onClose, onSuccess }: AddBillModa
       });
       playToastAudio('add');
       showCatalogToast(`Added Rs. ${billAmount.toLocaleString()} bill to ${client.customer_name}'s Khata!`, 'add');
-      onSuccess();
+      onSuccess({ amount: billAmount, newBalance: newBal });
       handleAnimatedClose();
     } catch (err: any) {
       alert(`Notice: ${err.message || 'Error adding bill to Khata'}`);
@@ -67,7 +67,7 @@ export default function AddBillModal({ client, onClose, onSuccess }: AddBillModa
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-emerald-400" />
             <div>
-              <h3 className="font-bold text-sm leading-none text-white">Add New Bill / Udhari to Khata</h3>
+              <h3 className="font-bold text-sm leading-none text-white">Add New Bill</h3>
               <p className="text-[10px] text-emerald-200 font-mono mt-1 font-semibold">{client.customer_name} • {client.phone}</p>
             </div>
           </div>
@@ -84,7 +84,7 @@ export default function AddBillModal({ client, onClose, onSuccess }: AddBillModa
 
           <div>
             <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              NEW BILL AMOUNT (RS.) *
+            BILL AMOUNT
             </label>
             <input
               type="number"
@@ -106,7 +106,7 @@ export default function AddBillModal({ client, onClose, onSuccess }: AddBillModa
               disabled={isSubmitting || !billAmount}
               className="px-5 py-2 bg-[#1b3830] hover:bg-[#142e27] text-white font-bold text-xs rounded-xl shadow-xs"
             >
-              {isSubmitting ? 'Saving...' : 'Add Bill to Khata'}
+              {isSubmitting ? 'Saving...' : 'Add Bill'}
             </button>
           </div>
         </form>

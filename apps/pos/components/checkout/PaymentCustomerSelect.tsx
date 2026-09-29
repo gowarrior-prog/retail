@@ -34,7 +34,7 @@ export default function PaymentCustomerSelect({
   return (
     <div className="flex flex-col gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
       <div className="flex items-center justify-between">
-        <label className="text-xs font-bold text-slate-700">Khata Customer / Debt Account</label>
+        <label className="text-xs font-bold text-slate-700">Debt Account</label>
         <button
           onClick={() => setShowNewCustInput(!showNewCustInput)}
           className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"

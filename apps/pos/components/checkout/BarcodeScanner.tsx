@@ -139,7 +139,7 @@ export default function BarcodeScanner() {
           <input
             type="text"
             className="w-full h-8.5 px-3 rounded-lg border border-slate-200 bg-white text-xs font-mono text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 font-semibold"
-            placeholder="Client Phone (03010606643)"
+            placeholder="Client Phone"
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
           />

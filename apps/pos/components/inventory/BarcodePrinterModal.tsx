@@ -79,8 +79,8 @@ export default function BarcodePrinterModal({ product, onClose }: { product: any
         }`}
       >
         <div className="p-4 bg-slate-50 border-b border-slate-200 flex justify-between items-center">
-          <h3 className="font-extrabold text-slate-800 text-sm">
-            Barcode Sticker Designer & Printer
+          <h3 className="font-bold text-slate-800 text-sm">
+            Barcode Sticker Designer
           </h3>
           <button onClick={handleAnimatedClose} className="p-1.5 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-slate-200 cursor-pointer">
             <X className="w-4 h-4" />

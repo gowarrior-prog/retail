@@ -1,1 +1,30 @@
-[]
+[
+  {
+    "id": "c4f90653-d7a0-4dfe-852c-3416a74ff8ef",
+    "customer_name": "Master Tariq Tailors",
+    "phone": "0300-8151290",
+    "total_balance": 38407.0,
+    "created_at": "2026-09-25 14:54:14.623335+00:00"
+  },
+  {
+    "id": "c67e2e8c-e5cc-4301-afcf-dc05f3602194",
+    "customer_name": "j4nu5g",
+    "phone": "000000000000000",
+    "total_balance": 0.0,
+    "created_at": "2026-09-25 14:56:37.410291+00:00"
+  },
+  {
+    "id": "e5a834db-9fea-4555-a837-5c9eed65b0ae",
+    "customer_name": "ued4u",
+    "phone": "33ye",
+    "total_balance": 0.0,
+    "created_at": "2026-09-25 14:59:50.266432+00:00"
+  },
+  {
+    "id": "787a04ef-dd02-484b-9c57-e7eef8a82d5c",
+    "customer_name": "o5kr55jr5u",
+    "phone": "0300-0000000",
+    "total_balance": 0.0,
+    "created_at": "2026-09-25 15:08:25.650884+00:00"
+  }
+]

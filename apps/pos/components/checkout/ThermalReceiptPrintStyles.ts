@@ -1,15 +1,5 @@
 'use client';
 
-/**
- * Plain-text receipt generator for Speed-X 80mm thermal printers
- * with "Generic / Text Only" Windows driver.
- * 
- * This driver strips all HTML/CSS formatting, so we use <pre> tags
- * with monospace plain text alignment using spaces/dashes.
- * 
- * Speed-X 80mm = ~42 characters per line at standard font.
- */
-
 const LINE_WIDTH = 42;
 const DASH_LINE = '-'.repeat(LINE_WIDTH);
 

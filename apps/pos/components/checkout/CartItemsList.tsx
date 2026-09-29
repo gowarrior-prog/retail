@@ -25,7 +25,7 @@ export default function CartItemsList({
     <div className="flex-1 flex flex-col p-4 bg-white min-h-0 overflow-y-auto font-sans">
       {/* Orders Header */}
       <div className="pb-3 flex items-center justify-between border-b border-slate-100 shrink-0">
-        <h2 className="text-base font-extrabold text-slate-800 tracking-tight">Orders</h2>
+        <h2 className="text-base font-bold text-slate-800 tracking-tight">Orders</h2>
         {items.length > 0 && (
           <span className="text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
             {items.length} item(s)
@@ -41,9 +41,6 @@ export default function CartItemsList({
               <ShoppingCart className="w-8 h-8" style={{ color: 'rgb(177, 175, 175)' }} />
             </div>
             <p className="text-sm font-bold text-slate-800">Cart is empty</p>
-            <p className="text-xs text-slate-400 mt-1 max-w-[220px] leading-relaxed">
-              Click any product from catalog to add to bill with barcode details
-            </p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -67,7 +64,6 @@ export default function CartItemsList({
                     <h4 className="text-xs font-bold text-slate-900 truncate">{item.name}</h4>
                     <p className="text-[10.5px] text-slate-500 mt-0.5 font-mono">
                       {item.quantity} × <span className="font-semibold text-slate-700">{formatCurrency(item.price)}</span>
-                      {item.discount > 0 && <span className="text-emerald-700 ml-1">({item.discount}% off)</span>}
                     </p>
                   </div>
 

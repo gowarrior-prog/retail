@@ -2,24 +2,21 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Check, Banknote, Building2, Smartphone, Receipt } from 'lucide-react';
-import { createKhataCustomer } from '@/lib/api';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
 
-interface ReceivePaymentModalProps {
-  client: any;
+interface PaySupplierModalProps {
+  supplier: any;
   onClose: () => void;
   onSuccess: (info?: any) => void;
 }
 
-export default function ReceivePaymentModal({ client, onClose, onSuccess }: ReceivePaymentModalProps) {
+export default function PaySupplierModal({ supplier, onClose, onSuccess }: PaySupplierModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
 
-  // Real actual due amount from client, with NO fake 21,700 fallback!
-  const currentDue = typeof client?.total_balance === 'number' ? Math.max(0, client.total_balance) : 0;
-  
-  // Initialize payment amount with real current due
+  const currentDue = typeof supplier?.total_balance === 'number' ? Math.max(0, supplier.total_balance) : 0;
+
   const [paymentAmount, setPaymentAmount] = useState<number>(currentDue);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK' | 'DIGITAL'>('CASH');
   const [note, setNote] = useState('');
@@ -41,23 +38,20 @@ export default function ReceivePaymentModal({ client, onClose, onSuccess }: Rece
     setIsSubmitting(true);
     try {
       const newBal = Math.max(0, currentDue - paymentAmount);
-      await createKhataCustomer({
-        customer_name: client.customer_name || client.name,
-        phone: client.phone || '0300-0000000',
-        initial_balance: newBal,
-      });
       playToastAudio('add');
-      showCatalogToast(`Received Rs. ${paymentAmount.toLocaleString()} payment from ${client.customer_name || client.name}!`, 'add');
+      showCatalogToast(
+        `Paid Rs. ${paymentAmount.toLocaleString()} to Supplier '${supplier.supplier_name}'!`,
+        'add'
+      );
       onSuccess({ amount: paymentAmount, method: paymentMethod, note, newBalance: newBal });
       handleAnimatedClose();
     } catch (err: any) {
-      alert(`Notice: ${err.message || 'Error recording payment'}`);
+      alert(`Notice: ${err.message || 'Error recording supplier payment'}`);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Dynamic quick-select pill options based on actual balance
   const halfDue = Math.round(currentDue / 2);
 
   return (
@@ -80,9 +74,9 @@ export default function ReceivePaymentModal({ client, onClose, onSuccess }: Rece
               <Receipt className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base text-slate-900 leading-tight">Receive Payment</h3>
+              <h3 className="font-bold text-base text-slate-900 leading-tight">Pay Supplier / Make Payment</h3>
               <p className="text-xs text-slate-500 font-medium mt-0.5">
-                {client.customer_name || client.name} • {client.phone || 'No phone'}
+                {supplier.supplier_name} • {supplier.phone || 'No phone'}
               </p>
             </div>
           </div>
@@ -93,11 +87,11 @@ export default function ReceivePaymentModal({ client, onClose, onSuccess }: Rece
 
         {/* Body Form */}
         <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4">
-          {/* Current Outstanding Box */}
+          {/* Current Payable Box */}
           <div className="bg-[#f0f5ff] border border-blue-100 rounded-xl p-3.5 flex items-center justify-between">
             <div>
               <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block font-mono">
-                CURRENT OUTSTANDING
+                CURRENT PAYABLE TO SUPPLIER
               </span>
               <span className={`text-xl font-black font-mono ${currentDue > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
                 Rs. {currentDue.toLocaleString()}
@@ -108,14 +102,14 @@ export default function ReceivePaymentModal({ client, onClose, onSuccess }: Rece
                 currentDue > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'
               }`}
             >
-              {currentDue > 0 ? 'Due' : 'Cleared'}
+              {currentDue > 0 ? 'Payable' : 'Cleared'}
             </span>
           </div>
 
           {/* Payment Amount Input */}
           <div>
             <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block font-mono mb-1.5">
-              PAYMENT AMOUNT
+              PAYMENT AMOUNT (RS)
             </label>
             <input
               type="number"
@@ -123,12 +117,12 @@ export default function ReceivePaymentModal({ client, onClose, onSuccess }: Rece
               min={1}
               value={paymentAmount || ''}
               onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-              placeholder="Enter amount"
+              placeholder="Enter amount to pay"
               className="w-full px-3.5 py-2.5 bg-[#f0f5ff] border border-blue-100 rounded-xl text-lg font-mono font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
             />
           </div>
 
-          {/* Dynamic Shortcut Pills based on real balance */}
+          {/* Dynamic Shortcut Pills */}
           {currentDue > 0 && (
             <div className="flex items-center gap-2">
               {halfDue > 0 && halfDue !== currentDue && (
@@ -185,13 +179,13 @@ export default function ReceivePaymentModal({ client, onClose, onSuccess }: Rece
           {/* Reference Note */}
           <div>
             <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block font-mono mb-1.5">
-              REFERENCE (OPTIONAL)
+              REFERENCE / CHEQUE / RECEIPT # (OPTIONAL)
             </label>
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="e.g. Received cash at shop..."
+              placeholder="e.g. Paid via HBL Online / Cash handed to agent..."
               className="w-full px-3.5 py-2.5 bg-[#f0f5ff] border border-blue-100 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
             />
           </div>

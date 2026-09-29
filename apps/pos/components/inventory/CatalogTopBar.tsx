@@ -38,17 +38,15 @@ export default function CatalogTopBar({
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Scan barcode or enter SKU / Item name..."
+            placeholder="Search items..."
             className="w-full pl-10 pr-16 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1b3830] shadow-2xs"
           />
-          <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-[10px] font-mono font-bold text-slate-400 uppercase">
-            ALT + S
-          </span>
+       
         </div>
 
         <button
           onClick={onOpenAddDrawer}
-          className="px-4 py-2.5 bg-[#1b3830] hover:bg-[#142e27] active:scale-95 text-white rounded-xl text-xs font-extrabold flex items-center gap-1.5 shadow transition-all cursor-pointer shrink-0"
+          className="px-4 py-2.5 bg-[#1b3830] hover:bg-[#142e27] active:scale-95 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow transition-all cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4 text-emerald-400" />
           <span>Add Cloth</span>

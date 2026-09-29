@@ -13,7 +13,7 @@ export default function CartKeypad({ activeMode, onKeypadPress }: CartKeypadProp
     'bg-white hover:bg-slate-100 active:bg-slate-200 rounded-lg border border-slate-200 text-slate-800 text-sm font-bold flex items-center justify-center cursor-pointer transition-colors select-none py-2';
 
   const modeBtnClass = (mode: string) =>
-    `rounded-lg font-extrabold text-xs tracking-wider border flex items-center justify-center cursor-pointer transition-colors select-none py-2 ${
+    `rounded-lg font-bold text-xs tracking-wider border flex items-center justify-center cursor-pointer transition-colors select-none py-2 ${
       activeMode === mode
         ? 'bg-[#1b3830] text-white border-[#153e35]'
         : 'bg-slate-200/90 text-slate-700 border-slate-300 hover:bg-slate-300'

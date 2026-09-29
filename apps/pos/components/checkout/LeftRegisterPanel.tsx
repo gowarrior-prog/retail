@@ -5,7 +5,6 @@ import { useCartStore } from '@/stores/useCartStore';
 import CartItemsList from './CartItemsList';
 import CartKeypad from './CartKeypad';
 import PaymentModal from './PaymentModal';
-import OrderNoteModal from './OrderNoteModal';
 import SplitBillModal from './SplitBillModal';
 import SalesReturnModal from './SalesReturnModal';
 import HoldOrdersModal from './HoldOrdersModal';
@@ -30,7 +29,6 @@ export default function LeftRegisterPanel() {
 
   // Modals
   const [showPaymentModal, setShowPaymentModal] = useState(false);
-  const [showNoteModal, setShowNoteModal] = useState(false);
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [showHoldModal, setShowHoldModal] = useState(false);
@@ -83,20 +81,14 @@ export default function LeftRegisterPanel() {
       />
 
       {/* Cart Summary & Keypad Section - Tall & Spacious for POS */}
-      <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-col gap-3 shrink-0">
-        {/* Subtotal Row */}
-        <div className="flex justify-between items-center text-xs font-bold text-slate-500">
-          <span>Subtotal ({items.length} Items)</span>
-          <span className="font-mono text-slate-800 text-sm">Rs. {subtotal().toLocaleString()}</span>
-        </div>
+      <div className="p-3.5 bg-slate-50 border-t border-slate-200 flex flex-col gap-3 shrink-0">      
 
         {/* Dark Green NET PAYABLE Banner (Tall Height) */}
-        <div className="bg-[#1b3830] text-white p-3.5 rounded-2xl flex items-center justify-between shadow-2xs">
+        <div className="bg-[#ffffff] text-black p-3.5 rounded-2xl flex items-center justify-between shadow-2xs">
           <div>
-            <span className="text-xs font-black uppercase tracking-wider block leading-tight">NET PAYABLE</span>
-            <span className="text-[10px] text-emerald-300 font-medium block">Cash / Card / Saved</span>
+            <span className="text-xs font-black font-bold uppercase tracking-wider block leading-tight">NET PAYABLE</span>
           </div>
-          <span className="text-2xl font-black font-mono tracking-tight text-white">
+          <span className="text-2xl font-black  font-mono tracking-tight text-black">
             Rs. {activeGrandTotal.toLocaleString()}
           </span>
         </div>
@@ -105,13 +97,13 @@ export default function LeftRegisterPanel() {
         <div className="grid grid-cols-2 gap-2.5">
           <button
             onClick={() => setShowReturnModal(true)}
-            className="py-3 bg-white hover:bg-slate-100 active:scale-[0.98] border border-slate-200 rounded-xl text-xs font-extrabold text-slate-800 flex items-center justify-center cursor-pointer shadow-2xs transition-all"
+            className="py-3 bg-white hover:bg-slate-100 active:scale-[0.98] border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center justify-center cursor-pointer shadow-2xs transition-all"
           >
             Return
           </button>
           <button
             onClick={() => setShowSplitModal(true)}
-            className="py-3 bg-white hover:bg-slate-100 active:scale-[0.98] border border-slate-200 rounded-xl text-xs font-extrabold text-slate-800 flex items-center justify-center cursor-pointer shadow-2xs transition-all"
+            className="py-3 bg-white hover:bg-slate-100 active:scale-[0.98] border border-slate-200 rounded-xl text-xs font-bold text-slate-800 flex items-center justify-center cursor-pointer shadow-2xs transition-all"
           >
             Split
           </button>
@@ -124,9 +116,9 @@ export default function LeftRegisterPanel() {
         <button
           onClick={() => setShowPaymentModal(true)}
           disabled={items.length === 0}
-          className="w-full bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] disabled:opacity-50 text-white rounded-2xl py-3.5 font-extrabold text-base tracking-wide flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
+          className="w-full bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] disabled:opacity-50 text-white rounded-2xl py-3.5 font-bold text-base tracking-wide flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
         >
-          <span>Pay & Checkout</span>
+          <span>Checkout</span>
         </button>
 
         {/* Clear Cart Button */}
@@ -142,7 +134,6 @@ export default function LeftRegisterPanel() {
 
       {/* Modals */}
       {showPaymentModal && <PaymentModal onClose={() => setShowPaymentModal(false)} />}
-      {showNoteModal && <OrderNoteModal onClose={() => setShowNoteModal(false)} />}
       {showSplitModal && <SplitBillModal onClose={() => setShowSplitModal(false)} onProceedToSplitCheckout={() => {}} />}
       {showReturnModal && <SalesReturnModal onClose={() => setShowReturnModal(false)} />}
       {showHoldModal && <HoldOrdersModal onClose={() => setShowHoldModal(false)} />}

@@ -10,21 +10,41 @@ import {
   Users,
   UserCheck,
   Settings,
+  ShoppingCartPlus,
+  LucideShoppingCart,
+  LockKeyholeOpenIcon,
+  BookOpenCheck,
+  ChartAreaIcon,
+  ChartBar,
+  ChartBarIncreasing,
+  ChartCandlestickIcon,
+  ChartBarIncreasingIcon,
+  AreaChart,
+  TruckElectric,
+  Rotate3D,
+  Rotate3d,
+  RotateCcwClockIcon,
+  RotateCcwKey,
+  RotateCcwSquare,
+  ArrowBigLeftDash,
+  ArrowDownAZIcon,
+  CircleArrowOutUpLeftIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCartStore } from '@/stores/useCartStore';
 
 const navItemsTop = [
-  { href: '/', label: 'Register', icon: ShoppingBag, shortcut: 'F2' },
-  { href: '/inventory', label: 'Catalog', icon: Grid, shortcut: 'F3' },
-  { href: '/khata', label: 'Hold', icon: Clock, shortcut: 'F4' },
-  { href: '/purchases', label: 'Returns', icon: RotateCcw, shortcut: 'F5' },
-  { href: '/employees', label: 'Clients', icon: Users, shortcut: 'F6' },
+  { href: '/', label: 'Bill', icon: LucideShoppingCart},
+  { href: '/inventory', label: 'Catalog', icon: ShoppingBag},
+  { href: '/khata', label: 'Ledger', icon: BookOpenCheck},
+  { href: '/purchases', label: 'Purchases', icon: TruckElectric },
+  { href: '/returns', label: 'Returns', icon: RotateCcw },
+  { href: '/employees', label: 'Employees', icon: Users},
 ];
 
 const navItemsBottom = [
-  { href: '/analytics', label: 'Shift', icon: UserCheck, shortcut: 'F9' },
-  { href: '/settings', label: 'Setup', icon: Settings, shortcut: 'F10' },
+  { href: '/analytics', label: 'Analytics', icon: ChartBarIncreasingIcon},
+  { href: '/settings', label: 'Setup', icon: Settings},
 ];
 
 export default function Sidebar() {
@@ -63,7 +83,7 @@ export default function Sidebar() {
                 'flex flex-col items-center justify-center w-[52px] h-[52px] rounded-xl transition-colors duration-200 group cursor-pointer relative select-none z-10',
                 isActive ? 'text-white font-bold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 font-medium'
               )}
-              title={`${item.label} (${item.shortcut})`}
+              title={`${item.label}`}
             >
               <Icon
                 className={cn(
@@ -105,7 +125,7 @@ export default function Sidebar() {
                 'flex flex-col items-center justify-center w-[52px] h-[52px] rounded-xl transition-colors duration-200 group cursor-pointer relative select-none z-10',
                 isActive ? 'text-white font-bold' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 font-medium'
               )}
-              title={`${item.label} (${item.shortcut})`}
+              title={`${item.label}`}
             >
               <Icon
                 className={cn(
