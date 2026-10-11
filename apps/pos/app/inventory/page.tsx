@@ -31,6 +31,7 @@ export default function CatalogPage() {
     showCatalogToast('✓ Product Deleted Successfully', 'delete');
     removeProductFromStore(targetId);
     deleteProduct(targetId).catch(() => {});
+    window.dispatchEvent(new Event('pos-data-updated'));
   };
 
   return (

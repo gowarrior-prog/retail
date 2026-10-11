@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { showCatalogToast } from '@/lib/toast';
 import { showProfessionalAlert } from '@/lib/alert';
-import { fetchPurchases } from '@/lib/api';
+import { fetchPurchases, deletePurchase } from '@/lib/api';
 import { exportToCSV } from '@/lib/utils';
 import AddSupplierModal from '@/components/purchases/AddSupplierModal';
 import PaySupplierModal from '@/components/purchases/PaySupplierModal';
@@ -200,20 +200,42 @@ export default function PurchasesPage() {
     setDeleteSupplierTarget(activeSupplier);
   };
 
-  const confirmDeleteSupplier = () => {
+  const confirmDeleteSupplier = async () => {
     if (!deleteSupplierTarget) return;
     const supToDelete = deleteSupplierTarget;
     setDeleteSupplierTarget(null);
+
+    try {
+      await deletePurchase(supToDelete.supplier_name);
+      if (supToDelete.ledger && supToDelete.ledger.length > 0) {
+        await Promise.all(
+          supToDelete.ledger.map((item) => {
+            const rawId = item.id.replace(/^leg-/, '');
+            return deletePurchase(rawId).catch(() => {});
+          })
+        );
+      }
+    } catch (e) {
+      console.warn('Error deleting supplier from database:', e);
+    }
 
     showCatalogToast(`Deleted Supplier account: ${supToDelete.supplier_name}`, 'delete');
     const updated = supplierRecords.filter((s) => String(s.id) !== String(supToDelete.id));
     setSupplierRecords(updated);
     setSelectedId(updated[0]?.id || null);
+    window.dispatchEvent(new Event('pos-data-updated'));
   };
 
   // Handle Ledger Item Deletion for Active Supplier ONLY
-  const handleDeleteLedgerItem = (itemId: string) => {
+  const handleDeleteLedgerItem = async (itemId: string) => {
     if (!activeSupplier) return;
+    const rawId = itemId.replace(/^leg-/, '');
+    try {
+      await deletePurchase(rawId);
+    } catch (e) {
+      console.warn('Error deleting purchase entry from database:', e);
+    }
+
     setSupplierRecords((prev) =>
       prev.map((s) => {
         if (String(s.id) === String(activeSupplier.id)) {
@@ -230,6 +252,7 @@ export default function PurchasesPage() {
       })
     );
     showCatalogToast('Purchase entry removed', 'delete');
+    window.dispatchEvent(new Event('pos-data-updated'));
   };
 
   // Handle Pay Supplier Success: Clears dues on existing purchase entries in place!

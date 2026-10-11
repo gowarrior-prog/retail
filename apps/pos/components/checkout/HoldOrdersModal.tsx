@@ -181,7 +181,7 @@ export default function HoldOrdersModal({ onClose }: { onClose: () => void }) {
         <div className="px-4 py-2 border-b border-slate-100 bg-slate-50/80 flex items-center justify-between text-xs text-slate-600 shrink-0">
           <span className=" font-bold">
           
-            {invoices.length} Bills Today
+            {invoices.length} Bills
           </span>
 
         </div>

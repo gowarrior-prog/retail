@@ -8,7 +8,15 @@ import SalesProfitTrendChart from '@/components/analytics/SalesProfitTrendChart'
 import CategoryShareDonutChart from '@/components/analytics/CategoryShareDonutChart';
 import SettlementAndMarginSection from '@/components/analytics/SettlementAndMarginSection';
 import AnalyticalReportsTable from '@/components/analytics/AnalyticalReportsTable';
-import { fetchBillingHistory, fetchKhata, fetchPurchases, fetchEmployees, fetchProducts } from '@/lib/api';
+import {
+  fetchBillingHistory,
+  fetchKhata,
+  fetchPurchases,
+  fetchEmployees,
+  fetchProducts,
+  fetchCustomerReturns,
+  fetchSupplierReturns,
+} from '@/lib/api';
 
 export default function AnalyticsPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -22,23 +30,29 @@ export default function AnalyticsPage() {
   const [purchases, setPurchases] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [customerReturns, setCustomerReturns] = useState<any[]>([]);
+  const [supplierReturns, setSupplierReturns] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [history, khata, purList, empList, prodList] = await Promise.all([
+      const [history, khata, purList, empList, prodList, custRets, suppRets] = await Promise.all([
         fetchBillingHistory().catch(() => []),
         fetchKhata().catch(() => []),
         fetchPurchases().catch(() => []),
         fetchEmployees().catch(() => []),
         fetchProducts().catch(() => []),
+        fetchCustomerReturns().catch(() => []),
+        fetchSupplierReturns().catch(() => []),
       ]);
       if (Array.isArray(history)) setBillingRecords(history);
       if (Array.isArray(khata)) setKhataCustomers(khata);
       if (Array.isArray(purList)) setPurchases(purList);
       if (Array.isArray(empList)) setEmployees(empList);
       if (Array.isArray(prodList)) setProducts(prodList);
+      if (Array.isArray(custRets)) setCustomerReturns(custRets);
+      if (Array.isArray(suppRets)) setSupplierReturns(suppRets);
     } catch (e) {
       console.error('Analytics page fetch error:', e);
     } finally {
@@ -194,18 +208,29 @@ export default function AnalyticsPage() {
 
       {/* 4. Trend Chart & Category Donut Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <SalesProfitTrendChart />
-        <CategoryShareDonutChart />
+        <SalesProfitTrendChart billingRecords={billingRecords} />
+        <CategoryShareDonutChart products={products} billingRecords={billingRecords} />
       </div>
 
       {/* 5. Settlement Breakdown & Fabric Margin Intelligence */}
-      <SettlementAndMarginSection />
+      <SettlementAndMarginSection
+        billingRecords={billingRecords}
+        purchases={purchases}
+        products={products}
+      />
 
       {/* 6. Analytical Reports Tabbed Table */}
       <AnalyticalReportsTable
         activeTab={activeAnalyticsTab}
         onTabChange={setActiveAnalyticsTab}
+        products={products}
+        billingRecords={billingRecords}
+        employees={employees}
+        khataCustomers={khataCustomers}
+        customerReturns={customerReturns}
+        supplierReturns={supplierReturns}
       />
     </div>
   );
 }
+

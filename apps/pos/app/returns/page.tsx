@@ -10,7 +10,7 @@ import ReturnWorkflowDrawer from '@/components/returns/ReturnWorkflowDrawer';
 import ReturnDetailModal from '@/components/returns/ReturnDetailModal';
 import DeleteConfirmModal from '@/components/inventory/DeleteConfirmModal';
 import { showCatalogToast } from '@/lib/toast';
-import { fetchBillingHistory } from '@/lib/api';
+import { fetchBillingHistory, deleteCustomerReturn, deleteSupplierReturn } from '@/lib/api';
 
 export default function ReturnsManagementPage() {
   const [isMounted, setIsMounted] = useState(false);
@@ -170,15 +170,27 @@ export default function ReturnsManagementPage() {
     return filteredSupplier.slice(start, start + PAGE_SIZE);
   }, [filteredSupplier, currentPage]);
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    if (deleteTarget.type === 'customer') {
-      setCustomerRecords(prev => prev.filter(r => r.id !== deleteTarget.id));
-    } else {
-      setSupplierRecords(prev => prev.filter(r => r.id !== deleteTarget.id));
-    }
-    showCatalogToast(`Record ${deleteTarget.code} deleted`, 'delete');
+    const target = deleteTarget;
     setDeleteTarget(null);
+
+    try {
+      if (target.type === 'customer') {
+        await deleteCustomerReturn(target.id);
+        if (target.code) await deleteCustomerReturn(target.code);
+        setCustomerRecords(prev => prev.filter(r => r.id !== target.id));
+      } else {
+        await deleteSupplierReturn(target.id);
+        if (target.code) await deleteSupplierReturn(target.code);
+        setSupplierRecords(prev => prev.filter(r => r.id !== target.id));
+      }
+    } catch (e) {
+      console.warn('Error deleting return record from database:', e);
+    }
+
+    showCatalogToast(`Record ${target.code} deleted`, 'delete');
+    window.dispatchEvent(new Event('pos-data-updated'));
   };
 
   if (!isMounted) {

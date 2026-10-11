@@ -156,3 +156,36 @@ export async function createSupplierReturn(data: any): Promise<any> {
     body: JSON.stringify(data),
   });
 }
+
+export async function deletePurchase(id: string): Promise<any> {
+  try {
+    return await apiFetch<any>('/purchases/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    return await apiFetch<any>(`/purchases/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+}
+
+export async function deleteCustomerReturn(id: string): Promise<any> {
+  try {
+    return await apiFetch<any>('/returns/customer/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    return await apiFetch<any>(`/returns/customer/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+}
+
+export async function deleteSupplierReturn(id: string): Promise<any> {
+  try {
+    return await apiFetch<any>('/returns/supplier/delete', {
+      method: 'POST',
+      body: JSON.stringify({ id }),
+    });
+  } catch {
+    return await apiFetch<any>(`/returns/supplier/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+}

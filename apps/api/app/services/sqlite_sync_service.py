@@ -435,6 +435,27 @@ def get_all_local_purchases() -> list:
     conn.close()
     return rows
 
+def delete_local_purchase(pur_id: str):
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_purchases WHERE id = ? OR supplier_name = ?", (pur_id, pur_id))
+    conn.commit()
+    conn.close()
+
+def delete_local_customer_return(ret_id: str):
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_customer_returns WHERE id = ? OR return_code = ?", (ret_id, ret_id))
+    conn.commit()
+    conn.close()
+
+def delete_local_supplier_return(ret_id: str):
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_supplier_returns WHERE id = ? OR return_code = ?", (ret_id, ret_id))
+    conn.commit()
+    conn.close()
+
 def log_security_audit_event(event_type: str, target_id: str | None, details: str):
     try:
         now_str = datetime.now().isoformat()
@@ -509,6 +530,7 @@ def clear_all_local_pos_data():
     cursor = conn.cursor()
     cursor.execute("DELETE FROM local_products")
     cursor.execute("DELETE FROM local_bills")
+    cursor.execute("DELETE FROM local_employees")
     cursor.execute("DELETE FROM local_khata")
     cursor.execute("DELETE FROM local_purchases")
     cursor.execute("DELETE FROM local_customer_returns")

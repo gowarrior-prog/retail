@@ -26,7 +26,10 @@ from app.services.sqlite_sync_service import (
     get_all_local_bills,
     restock_local_product_stock,
     save_purchase_locally,
-    get_all_local_purchases
+    get_all_local_purchases,
+    delete_local_purchase,
+    delete_local_customer_return,
+    delete_local_supplier_return
 )
 
 from app.routers.catalog import invalidate_product_cache
@@ -360,6 +363,38 @@ async def get_shop_purchases(db: AsyncSession = Depends(get_db3)):
         except Exception:
             pass
     return []
+
+
+class DeletePurchaseRequest(BaseModel):
+    id: str
+
+@router.delete("/purchases/{pur_id}")
+async def delete_shop_purchase(pur_id: str, db: AsyncSession = Depends(get_db3)):
+    delete_local_purchase(pur_id)
+    if db is not None:
+        try:
+            res = await db.execute(
+                select(ShopPurchaseModel).filter(
+                    (ShopPurchaseModel.id == pur_id) | (ShopPurchaseModel.supplier_name == pur_id)
+                )
+            )
+            recs = res.scalars().all()
+            for r in recs:
+                await db.delete(r)
+            if recs:
+                await db.commit()
+        except Exception as e:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            print(f"Notice: DB3 purchase delete notice: {e}")
+    invalidate_purchase_cache()
+    return {"status": "success", "id": pur_id, "message": "Purchase record deleted successfully"}
+
+@router.post("/purchases/delete")
+async def delete_shop_purchase_post(req: DeletePurchaseRequest, db: AsyncSession = Depends(get_db3)):
+    return await delete_shop_purchase(req.id, db)
 
 
 @router.get("/billing-history/{invoice_number}")
@@ -746,6 +781,35 @@ async def get_customer_returns():
         return []
 
 
+class DeleteReturnRequest(BaseModel):
+    id: str
+
+@router.delete("/returns/customer/{ret_id}")
+async def delete_customer_return_endpoint(ret_id: str):
+    delete_local_customer_return(ret_id)
+    try:
+        from app.core.database import SessionDb2
+        from app.models.db2_operations import CustomerReturnModel
+        async with SessionDb2() as db2:
+            res = await db2.execute(
+                select(CustomerReturnModel).filter(
+                    (CustomerReturnModel.id == ret_id) | (CustomerReturnModel.return_code == ret_id)
+                )
+            )
+            recs = res.scalars().all()
+            for r in recs:
+                await db2.delete(r)
+            if recs:
+                await db2.commit()
+    except Exception as e:
+        print(f"Notice: DB2 customer return delete notice: {e}")
+    return {"status": "success", "id": ret_id, "message": "Customer return record deleted successfully"}
+
+@router.post("/returns/customer/delete")
+async def delete_customer_return_post(req: DeleteReturnRequest):
+    return await delete_customer_return_endpoint(req.id)
+
+
 @router.post("/returns/supplier")
 async def create_supplier_return(req: SupplierReturnCreateRequest):
     from app.services.sqlite_sync_service import save_supplier_return_locally
@@ -829,6 +893,32 @@ async def get_supplier_returns():
             ]
     except Exception:
         return []
+
+
+@router.delete("/returns/supplier/{ret_id}")
+async def delete_supplier_return_endpoint(ret_id: str):
+    delete_local_supplier_return(ret_id)
+    try:
+        from app.core.database import SessionDb2
+        from app.models.db2_operations import SupplierReturnModel
+        async with SessionDb2() as db2:
+            res = await db2.execute(
+                select(SupplierReturnModel).filter(
+                    (SupplierReturnModel.id == ret_id) | (SupplierReturnModel.return_code == ret_id)
+                )
+            )
+            recs = res.scalars().all()
+            for r in recs:
+                await db2.delete(r)
+            if recs:
+                await db2.commit()
+    except Exception as e:
+        print(f"Notice: DB2 supplier return delete notice: {e}")
+    return {"status": "success", "id": ret_id, "message": "Supplier return record deleted successfully"}
+
+@router.post("/returns/supplier/delete")
+async def delete_supplier_return_post(req: DeleteReturnRequest):
+    return await delete_supplier_return_endpoint(req.id)
 
 
 
