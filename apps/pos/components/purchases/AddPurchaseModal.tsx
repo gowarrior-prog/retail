@@ -9,7 +9,7 @@ import { addPurchase } from '@/lib/api';
 interface AddPurchaseModalProps {
   supplier: { id: string; supplier_name: string; phone: string };
   onClose: () => void;
-  onSuccess: (purchaseData: { bill_number: string; description: string; purchase_amount: number; paid_amount: number }) => void;
+  onSuccess: (purchaseData: { id?: string; bill_number: string; description: string; purchase_amount: number; paid_amount: number }) => void;
 }
 
 export default function AddPurchaseModal({ supplier, onClose, onSuccess }: AddPurchaseModalProps) {
@@ -37,8 +37,9 @@ export default function AddPurchaseModal({ supplier, onClose, onSuccess }: AddPu
     if (!purchaseAmount || purchaseAmount <= 0) return;
     setIsSubmitting(true);
     try {
+      let res: any = null;
       try {
-        await addPurchase({
+        res = await addPurchase({
           supplier_name: supplier.supplier_name,
           item_name: itemsSummary.trim() || 'Stock Fabric Purchase',
           quantity: 1,
@@ -53,6 +54,7 @@ export default function AddPurchaseModal({ supplier, onClose, onSuccess }: AddPu
       playToastAudio('add');
       showCatalogToast(`Added Purchase Rs. ${purchaseAmount.toLocaleString()} to ${supplier.supplier_name}!`, 'add');
       onSuccess({
+        id: res?.id,
         bill_number: billNumber.trim() || `PUR-${Date.now()}`,
         description: itemsSummary.trim() || 'Stock Fabric Purchase',
         purchase_amount: purchaseAmount,

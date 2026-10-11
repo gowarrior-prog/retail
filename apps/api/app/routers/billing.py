@@ -370,12 +370,14 @@ class DeletePurchaseRequest(BaseModel):
 
 @router.delete("/purchases/{pur_id}")
 async def delete_shop_purchase(pur_id: str, db: AsyncSession = Depends(get_db3)):
-    delete_local_purchase(pur_id)
+    pur_str = str(pur_id).strip()
+    delete_local_purchase(pur_str)
     if db is not None:
         try:
+            from sqlalchemy import func
             res = await db.execute(
                 select(ShopPurchaseModel).filter(
-                    (ShopPurchaseModel.id == pur_id) | (ShopPurchaseModel.supplier_name == pur_id)
+                    (ShopPurchaseModel.id == pur_str) | (func.lower(ShopPurchaseModel.supplier_name) == pur_str.lower())
                 )
             )
             recs = res.scalars().all()
@@ -390,7 +392,7 @@ async def delete_shop_purchase(pur_id: str, db: AsyncSession = Depends(get_db3))
                 pass
             print(f"Notice: DB3 purchase delete notice: {e}")
     invalidate_purchase_cache()
-    return {"status": "success", "id": pur_id, "message": "Purchase record deleted successfully"}
+    return {"status": "success", "id": pur_str, "message": "Purchase record deleted successfully"}
 
 @router.post("/purchases/delete")
 async def delete_shop_purchase_post(req: DeletePurchaseRequest, db: AsyncSession = Depends(get_db3)):

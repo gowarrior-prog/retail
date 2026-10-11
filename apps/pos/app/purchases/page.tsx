@@ -346,7 +346,7 @@ export default function PurchasesPage() {
       prev.map((s) => {
         if (String(s.id) === String(activeSupplier.id)) {
           const newLedgerItem: PurchaseLedgerItem = {
-            id: `leg-pur-${Date.now()}`,
+            id: info?.id ? `leg-${info.id}` : `leg-pur-${Date.now()}`,
             date: todayStr,
             bill_number: info?.bill_number || `BILL-${Math.floor(100 + Math.random() * 900)}`,
             description: info?.description || 'Stock Purchase Entry',
