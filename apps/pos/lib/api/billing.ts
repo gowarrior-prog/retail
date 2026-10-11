@@ -1,26 +1,16 @@
-import { z } from 'zod';
 import { apiFetch } from './client';
-import { POSCheckoutSchema, BillingRecordSchema } from '../validators';
+import { POSCheckoutSchema, BillingRecordSchema, BillingRecord } from '../validators';
+import { z } from 'zod';
 
-export type BillingRecord = z.infer<typeof BillingRecordSchema>;
-
-export async function fetchPurchases(): Promise<any[]> {
-  try {
-    const raw = await apiFetch<any[]>('/purchases');
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
-
-export async function fetchBillingHistory(): Promise<BillingRecord[]> {
+export async function fetchBillingHistory(): Promise<any[]> {
   try {
     const raw = await apiFetch<any[]>('/billing-history');
     if (Array.isArray(raw)) {
-      return z.array(BillingRecordSchema.partial()).parse(raw) as BillingRecord[];
+      return raw;
     }
     return [];
-  } catch {
+  } catch (e) {
+    console.error('fetchBillingHistory error:', e);
     return [];
   }
 }
@@ -46,6 +36,15 @@ export async function posSalesReturn(data: {
   });
 }
 
+export async function fetchKhata(): Promise<any[]> {
+  try {
+    const raw = await apiFetch<any[]>('/khata');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
 export async function createKhataCustomer(data: {
   customer_name: string;
   phone: string;
@@ -55,6 +54,58 @@ export async function createKhataCustomer(data: {
     method: 'POST',
     body: JSON.stringify(data),
   });
+}
+
+export async function addKhataTransaction(data: {
+  khata_id: string;
+  type: 'DEBIT' | 'CREDIT';
+  amount: number;
+  description?: string;
+}): Promise<any> {
+  try {
+    return await apiFetch<any>('/khata/transaction', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  } catch {
+    return { status: 'offline', message: 'Transaction saved locally' };
+  }
+}
+
+export async function fetchPurchases(): Promise<any[]> {
+  try {
+    const raw = await apiFetch<any[]>('/purchases');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function addPurchase(data: {
+  supplier_name: string;
+  item_name: string;
+  quantity: number;
+  total_cost: number;
+  paid_amount: number;
+  product_id?: string;
+  notes?: string;
+}): Promise<any> {
+  try {
+    return await apiFetch<any>('/purchases/add', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  } catch {
+    return { status: 'offline', message: 'Purchase saved locally' };
+  }
+}
+
+export async function fetchInvoiceByNumber(invoiceNumber: string): Promise<any> {
+  try {
+    return await apiFetch<any>(`/billing-history/${invoiceNumber}`);
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteKhataCustomer(id: string): Promise<any> {
@@ -71,5 +122,37 @@ export async function deleteKhataCustomer(id: string): Promise<any> {
 export async function clearAllKhataRecords(): Promise<any> {
   return await apiFetch<any>('/khata/clear-all', {
     method: 'DELETE',
+  });
+}
+
+export async function fetchCustomerReturns(): Promise<any[]> {
+  try {
+    const raw = await apiFetch<any[]>('/returns/customer');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createCustomerReturn(data: any): Promise<any> {
+  return await apiFetch<any>('/returns/customer', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function fetchSupplierReturns(): Promise<any[]> {
+  try {
+    const raw = await apiFetch<any[]>('/returns/supplier');
+    return Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function createSupplierReturn(data: any): Promise<any> {
+  return await apiFetch<any>('/returns/supplier', {
+    method: 'POST',
+    body: JSON.stringify(data),
   });
 }

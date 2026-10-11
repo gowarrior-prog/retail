@@ -5,7 +5,7 @@ This bypasses Chrome's print dialog and Generic/Text Only driver limitations.
 """
 import win32print
 
-LINE_WIDTH = 42
+LINE_WIDTH = 48
 DASH_LINE = b'-' * LINE_WIDTH
 
 # ESC/POS Command Constants
@@ -35,9 +35,9 @@ def _left_right(left: str, right: str) -> bytes:
 
 
 def _three_col(c1: str, c2: str, c3: str) -> bytes:
-    col1 = c1[:22].ljust(22)
-    col2 = c2[:6].rjust(3).ljust(6)
-    col3 = c3[:14].rjust(14)
+    col1 = c1[:26].ljust(26)
+    col2 = c2[:6].rjust(4).ljust(6)
+    col3 = c3[:16].rjust(16)
     return _text(col1 + col2 + col3) + LF
 
 
@@ -69,15 +69,21 @@ def build_receipt_bytes(data: dict) -> bytes:
     buf = bytearray()
     buf += ESC_INIT
 
-    # Top Margin (2 lines feed so header title BILAL CLOTH is never cut off at top)
-    buf += LF + LF
+    # Top Margin (0 extra line feeds so logo starts right at top cut edge)
+    buf += ESC_CENTER
 
-    # Header
-    buf += ESC_CENTER + ESC_BOLD_ON
+    # 24-dot Column Bit-Image Logo
+    try:
+        from app.services.logo_bitmap import LOGO_ESCPOS_BYTES
+        buf += LOGO_ESCPOS_BYTES
+    except Exception as e:
+        print(f"Notice: Logo bitmap load notice: {e}")
+
+    # Header - Centered Bold Store Title (with line spacing after logo)
+    buf += ESC_CENTER + LF + ESC_BOLD_ON
     buf += _text('BILAL CLOTH & SILK CENTER') + LF
     buf += ESC_BOLD_OFF
-    buf += _text('Main Bazar Railway Road') + LF
-    buf += _text('Narowal') + LF
+    buf += _text('Main Bazar Railway Road, Narowal') + LF
     buf += ESC_BOLD_ON + _text('Ph: 0301-0606643') + LF + ESC_BOLD_OFF
     buf += ESC_LEFT
 
@@ -143,8 +149,8 @@ def build_receipt_bytes(data: dict) -> bytes:
     buf += _text('invoice within 7 days.') + LF
     buf += ESC_LEFT
 
-    # Feed 4 lines to clear footer past cutter blade (~12mm)
-    buf += b'\x1B\x64\x04'
+    # Feed 2 lines to clear footer past cutter blade
+    buf += b'\x1B\x64\x02'
     # SINGLE Partial Cut Command (GS V 66 0) for Speed-X 80mm
     buf += b'\x1D\x56\x42\x00'
 

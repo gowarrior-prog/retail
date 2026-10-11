@@ -94,3 +94,14 @@ body {
 h1, h2, h3, h4, h5, h6, th {
   letter-spacing: -0.015em;
 }
+
+/* Print Cleanliness: Hide overlays, sidebars, and toasts during browser printing */
+@media print {
+  aside, nav, header, button {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+    overflow: visible !important;
+  }
+}

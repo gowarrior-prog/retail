@@ -104,7 +104,7 @@ export async function testServerConnection(targetIp?: string): Promise<{ success
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const apiBase = getApiBaseUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2500);
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
     const res = await fetch(`${apiBase}${path}`, {
@@ -126,6 +126,11 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     return await res.json();
   } catch (err: any) {
     clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      console.warn(`Notice: API request timeout for ${path}`);
+    } else {
+      console.warn(`Notice: API connection fallback for ${path}:`, err.message || err);
+    }
     throw err;
   }
 }

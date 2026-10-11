@@ -29,6 +29,7 @@ def get_sqlite_conn() -> sqlite3.Connection:
         conn.execute("PRAGMA temp_store=MEMORY;")
         res = conn.execute("PRAGMA quick_check").fetchone()
         if res and res[0] == "ok":
+            _create_tables(conn)
             return conn
         conn.close()
         conn = None
@@ -118,6 +119,47 @@ def _create_tables(conn: sqlite3.Connection):
     )
     """)
     cursor.execute("""
+    CREATE TABLE IF NOT EXISTS local_purchases (
+        id TEXT PRIMARY KEY,
+        supplier_name TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL,
+        total_cost REAL NOT NULL,
+        paid_amount REAL NOT NULL,
+        remaining REAL DEFAULT 0.0,
+        notes TEXT,
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS local_customer_returns (
+        id TEXT PRIMARY KEY,
+        return_code TEXT NOT NULL,
+        customer_name TEXT NOT NULL,
+        customer_phone TEXT,
+        original_invoice TEXT,
+        items_json TEXT NOT NULL,
+        total_value REAL NOT NULL,
+        refund_type TEXT DEFAULT 'CASH',
+        condition TEXT DEFAULT 'Restocked',
+        status TEXT DEFAULT 'Completed',
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS local_supplier_returns (
+        id TEXT PRIMARY KEY,
+        return_code TEXT NOT NULL,
+        supplier_name TEXT NOT NULL,
+        purchase_bill TEXT,
+        items_json TEXT NOT NULL,
+        total_value REAL NOT NULL,
+        reason TEXT,
+        status TEXT DEFAULT 'Completed',
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
     CREATE TABLE IF NOT EXISTS security_audit_logs (
         id TEXT PRIMARY KEY,
         event_type TEXT NOT NULL,
@@ -126,30 +168,37 @@ def _create_tables(conn: sqlite3.Connection):
         created_at TEXT NOT NULL
     )
     """)
+
+    # Performance & Search Indexes for 0ms queries
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_barcode ON local_products(barcode);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_sku ON local_products(sku);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_name ON local_products(name);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_category ON local_products(category);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_invoice_number ON local_bills(invoice_number);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_created_at ON local_bills(created_at);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_bills_sync_status ON local_bills(sync_status);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_khata_name ON local_khata(name);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_khata_phone ON local_khata(phone);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_purchases_supplier ON local_purchases(supplier_name);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON local_purchases(created_at);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_cust_rets_code ON local_customer_returns(return_code);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_supp_rets_code ON local_supplier_returns(return_code);")
     conn.commit()
 
 def init_sqlite_db():
-    """Initializes local SQLite database schemas with tampering protection columns."""
+    """Initializes local SQLite database schemas with tampering protection columns and 0ms search indexes."""
     conn = get_sqlite_conn()
-    _create_tables(conn)
     conn.close()
 
 
 def save_bill_locally(invoice_number: str, customer_phone: str, total_amount: float, discount: float, tax: float, payment_mode: str, cashier_name: str, item_details_json: str) -> dict:
-    """
-    Saves a bill locally into SQLite FIRST before syncing to remote database.
-    Calculates cryptographic checksum to prevent tampering.
-    """
-    init_sqlite_db()
     bill_id = str(uuid.uuid4())
     now_str = datetime.now().isoformat()
-
     raw_payload = f"{bill_id}:{invoice_number}:{total_amount}:{payment_mode}:{cashier_name}"
     checksum = calculate_checksum(raw_payload)
 
     conn = get_sqlite_conn()
     cursor = conn.cursor()
-
     cursor.execute("""
         INSERT INTO local_bills (id, invoice_number, customer_phone, total_amount, discount, tax, payment_mode, cashier_name, item_details_json, sync_status, checksum, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?)
@@ -167,17 +216,12 @@ def save_bill_locally(invoice_number: str, customer_phone: str, total_amount: fl
     }
 
 def save_product_locally(product_id: str, odoo_id: int | None, name: str, price: float, cost_price: float | None, sku: str, barcode: str | None, category: str | None, stock: int | None) -> dict:
-    """
-    Saves or updates a product in local SQLite with cryptographic HMAC checksum to prevent local price tampering.
-    """
-    init_sqlite_db()
     now_str = datetime.now().isoformat()
     raw_payload = f"{product_id}:{name}:{price}:{sku}"
     checksum = calculate_checksum(raw_payload)
 
     conn = get_sqlite_conn()
     cursor = conn.cursor()
-
     cursor.execute("""
         INSERT INTO local_products (id, odoo_id, name, price, cost_price, sku, barcode, category, stock, checksum, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -196,16 +240,11 @@ def save_product_locally(product_id: str, odoo_id: int | None, name: str, price:
 
     conn.commit()
     conn.close()
-
     return {"id": product_id, "name": name, "price": price, "checksum": checksum, "saved_locally": True}
 
 def save_products_bulk_locally(items: list[dict]):
-    """
-    Saves multiple products in a single bulk transaction for instant performance (50ms vs 20s).
-    """
     if not items:
         return
-    init_sqlite_db()
     now_str = datetime.now().isoformat()
     conn = get_sqlite_conn()
     cursor = conn.cursor()
@@ -242,28 +281,16 @@ def save_products_bulk_locally(items: list[dict]):
     conn.commit()
     conn.close()
 
-def verify_product_integrity(product_id: str, name: str, price: float, sku: str, stored_checksum: str) -> bool:
-    """
-    Validates HMAC checksum of a product to detect unauthorized local price editing.
-    """
-    expected_checksum = calculate_checksum(f"{product_id}:{name}:{price}:{sku}")
-    return hmac.compare_digest(expected_checksum, stored_checksum)
-
-def log_security_event(event_type: str, target_id: str, details: str):
-    """Logs security violations (e.g. price tampering attempts)."""
-    init_sqlite_db()
+def get_all_local_bills() -> list:
     conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO security_audit_logs (id, event_type, target_id, details, created_at)
-        VALUES (?, ?, ?, ?, ?)
-    """, (str(uuid.uuid4()), event_type, target_id, details, datetime.now().isoformat()))
-    conn.commit()
+    cursor.execute('SELECT * FROM local_bills ORDER BY created_at DESC')
+    rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
+    return rows
 
 def get_pending_local_bills() -> list:
-    """Fetches all local bills that are pending remote database sync."""
-    init_sqlite_db()
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -273,7 +300,6 @@ def get_pending_local_bills() -> list:
     return rows
 
 def mark_bill_as_synced(bill_id: str):
-    """Marks a local bill as SYNCED after remote database confirmation."""
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute("UPDATE local_bills SET sync_status = 'SYNCED' WHERE id = ?", (bill_id,))
@@ -281,8 +307,6 @@ def mark_bill_as_synced(bill_id: str):
     conn.close()
 
 def get_all_local_products() -> list:
-    """Fetches all products stored in local SQLite database (pos_local.db)."""
-    init_sqlite_db()
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -292,7 +316,6 @@ def get_all_local_products() -> list:
     return rows
 
 def delete_local_product(product_id: str):
-    """Deletes a product from local SQLite database."""
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM local_products WHERE id = ?", (product_id,))
@@ -300,7 +323,6 @@ def delete_local_product(product_id: str):
     conn.close()
 
 def restock_local_product_stock(product_id: str, quantity: int):
-    """Increments stock for a returned product in local SQLite database."""
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute("""
@@ -311,11 +333,9 @@ def restock_local_product_stock(product_id: str, quantity: int):
     conn.commit()
     conn.close()
 
-
 # ── Employee SQLite CRUD ──────────────────────────────────────
 
 def save_employee_locally(emp_id: str, odoo_id: int | None, name: str, job_title: str | None, department: str | None, phone: str | None, email: str | None, status: str = "active") -> dict:
-    init_sqlite_db()
     now_str = datetime.now().isoformat()
     conn = get_sqlite_conn()
     cursor = conn.cursor()
@@ -332,7 +352,6 @@ def save_employee_locally(emp_id: str, odoo_id: int | None, name: str, job_title
     return {"id": emp_id, "name": name, "saved_locally": True}
 
 def get_all_local_employees() -> list:
-    init_sqlite_db()
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -351,7 +370,6 @@ def delete_local_employee(emp_id: str):
 # ── Khata SQLite CRUD ──────────────────────────────────────
 
 def save_khata_locally(cust_id: str, odoo_id: int | None, name: str, phone: str | None, email: str | None, balance: float = 0.0) -> dict:
-    init_sqlite_db()
     now_str = datetime.now().isoformat()
     conn = get_sqlite_conn()
     cursor = conn.cursor()
@@ -367,7 +385,6 @@ def save_khata_locally(cust_id: str, odoo_id: int | None, name: str, phone: str 
     return {"id": cust_id, "name": name, "saved_locally": True}
 
 def get_all_local_khata() -> list:
-    init_sqlite_db()
     conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -390,10 +407,36 @@ def clear_all_local_khata():
     conn.commit()
     conn.close()
 
+# ── Purchases SQLite CRUD ──────────────────────────────────────
+
+def save_purchase_locally(pur_id: str, supplier_name: str, item_name: str, quantity: int, total_cost: float, paid_amount: float, remaining: float, notes: str | None = None) -> dict:
+    now_str = datetime.now().isoformat()
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO local_purchases (id, supplier_name, item_name, quantity, total_cost, paid_amount, remaining, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            supplier_name=excluded.supplier_name, item_name=excluded.item_name,
+            quantity=excluded.quantity, total_cost=excluded.total_cost,
+            paid_amount=excluded.paid_amount, remaining=excluded.remaining,
+            notes=excluded.notes
+    """, (pur_id, supplier_name, item_name, quantity, total_cost, paid_amount, remaining, notes or "", now_str))
+    conn.commit()
+    conn.close()
+    return {"id": pur_id, "supplier_name": supplier_name, "saved_locally": True}
+
+def get_all_local_purchases() -> list:
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM local_purchases ORDER BY created_at DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
 def log_security_audit_event(event_type: str, target_id: str | None, details: str):
-    """Logs tamper-proof security events for critical business mutations (price edit, stock change, deletion)."""
     try:
-        init_sqlite_db()
         now_str = datetime.now().isoformat()
         log_id = str(uuid.uuid4())
         conn = get_sqlite_conn()
@@ -407,4 +450,55 @@ def log_security_audit_event(event_type: str, target_id: str | None, details: st
     except Exception as err:
         print(f"[Audit Log Error] {err}")
 
+# ── Returns SQLite CRUD ──────────────────────────────────────
+
+def save_customer_return_locally(ret_id: str, return_code: str, customer_name: str, customer_phone: str | None, original_invoice: str | None, items_json: str, total_value: float, refund_type: str = "CASH", condition: str = "Restocked", status: str = "Completed") -> dict:
+    now_str = datetime.now().isoformat()
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO local_customer_returns (id, return_code, customer_name, customer_phone, original_invoice, items_json, total_value, refund_type, condition, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            return_code=excluded.return_code, customer_name=excluded.customer_name,
+            items_json=excluded.items_json, total_value=excluded.total_value,
+            refund_type=excluded.refund_type, condition=excluded.condition, status=excluded.status
+    """, (ret_id, return_code, customer_name, customer_phone or "", original_invoice or "", items_json, total_value, refund_type, condition, status, now_str))
+    conn.commit()
+    conn.close()
+    return {"id": ret_id, "return_code": return_code, "saved_locally": True}
+
+def get_all_local_customer_returns() -> list:
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM local_customer_returns ORDER BY created_at DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+def save_supplier_return_locally(ret_id: str, return_code: str, supplier_name: str, purchase_bill: str | None, items_json: str, total_value: float, reason: str | None = None, status: str = "Completed") -> dict:
+    now_str = datetime.now().isoformat()
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO local_supplier_returns (id, return_code, supplier_name, purchase_bill, items_json, total_value, reason, status, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            return_code=excluded.return_code, supplier_name=excluded.supplier_name,
+            items_json=excluded.items_json, total_value=excluded.total_value,
+            reason=excluded.reason, status=excluded.status
+    """, (ret_id, return_code, supplier_name, purchase_bill or "", items_json, total_value, reason or "", status, now_str))
+    conn.commit()
+    conn.close()
+    return {"id": ret_id, "return_code": return_code, "saved_locally": True}
+
+def get_all_local_supplier_returns() -> list:
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM local_supplier_returns ORDER BY created_at DESC")
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
 

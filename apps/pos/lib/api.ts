@@ -4,7 +4,7 @@ export * from './api/employees';
 export * from './api/billing';
 export * from './api/odoo';
 
-// No-op dummy cache exports for backward compatibility without saving to browser
+// Security Policy: No client-side data storage — all data comes from backend SQL only
 export function getLocalProductCache(): any[] { return []; }
 export function saveLocalProductCache(_p: any[]): void {}
 export function getLocalEmployeesCache(): any[] { return []; }

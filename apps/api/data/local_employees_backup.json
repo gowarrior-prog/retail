@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "709e6f86-873a-440f-b359-42880c7561d1",
+    "name": "subhan",
+    "phone": "030011111111",
+    "cnic": null,
+    "role": "Senior Counter Salesman",
+    "base_salary": 35000.0,
+    "is_deleted": false,
+    "attendance_status": "PRESENT",
+    "attendance_notes": null,
+    "leave_status": "NONE",
+    "leave_reason": null,
+    "created_at": "2026-10-05 01:56:24.372888+00:00"
+  }
+]

@@ -11,6 +11,10 @@ from app.core.database import (
     Base1, Base2, Base3,
     engine_db1, engine_db2, engine_db3
 )
+import app.models.db1_catalog
+import app.models.db2_operations
+import app.models.db3_finance
+
 from app.routers import (
     catalog_router,
     auth_router,
@@ -25,6 +29,26 @@ from app.services.backup_service import backup_all_data_to_hard_drive
 import os
 
 ENABLE_ODOO_SYNC = os.getenv("ENABLE_ODOO_SYNC", "false").lower() == "true"
+
+async def ensure_cloud_tables_exist():
+    """Background task to ensure all cloud tables exist in DB1, DB2, and DB3."""
+    for attempt in range(3):
+        try:
+            async with engine_db2.begin() as conn:
+                await conn.run_sync(Base2.metadata.create_all)
+            print("[Cloud DB2] Customer & Supplier Returns, Employees schema confirmed.")
+            break
+        except Exception as e:
+            await asyncio.sleep(2.0)
+
+    for attempt in range(3):
+        try:
+            async with engine_db3.begin() as conn:
+                await conn.run_sync(Base3.metadata.create_all)
+            print("[Cloud DB3] Shop Purchases, Billing & Khata schema confirmed.")
+            break
+        except Exception as e:
+            await asyncio.sleep(2.0)
 
 async def periodic_odoo_auto_sync():
     """Background task: Automatically backs up data to local hard drive and syncs Odoo only if explicitly enabled."""
@@ -44,38 +68,32 @@ async def periodic_odoo_auto_sync():
         await asyncio.sleep(900)
 
 
+async def periodic_offline_to_cloud_sync():
+    """Background task: Every 60 seconds, silently syncs any offline pending bills, purchases, and returns to cloud when internet is available."""
+    from app.routers.billing import sync_pending_offline_data
+    while True:
+        try:
+            await asyncio.sleep(60)
+            await sync_pending_offline_data()
+        except Exception:
+            pass
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Fast non-blocking schema check per database (max 0.8s timeout)
-    try:
-        async def init_db1():
-            async with engine_db1.begin() as conn:
-                await conn.run_sync(Base1.metadata.create_all)
-        await asyncio.wait_for(init_db1(), timeout=0.8)
-    except Exception as e:
-        print(f"Notice: DB1 running in local SQLite mode.")
-
-    try:
-        async def init_db2():
-            async with engine_db2.begin() as conn:
-                await conn.run_sync(Base2.metadata.create_all)
-        await asyncio.wait_for(init_db2(), timeout=0.8)
-    except Exception as e:
-        print(f"Notice: DB2 running in local SQLite mode.")
-
-    try:
-        async def init_db3():
-            async with engine_db3.begin() as conn:
-                await conn.run_sync(Base3.metadata.create_all)
-        await asyncio.wait_for(init_db3(), timeout=0.8)
-    except Exception as e:
-        print(f"Notice: DB3 running in local SQLite mode.")
+    # Launch background cloud schema verification
+    asyncio.create_task(ensure_cloud_tables_exist())
     
     # Run initial hard drive backup on startup in background
     try:
         asyncio.create_task(backup_all_data_to_hard_drive())
     except Exception:
         pass
+
+    # Launch periodic offline-to-cloud automatic background synchronization
+    asyncio.create_task(periodic_offline_to_cloud_sync())
+
+    # Launch periodic hard drive backup and optional Odoo sync
+    asyncio.create_task(periodic_odoo_auto_sync())
     
     yield
 
@@ -90,7 +108,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

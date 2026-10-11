@@ -37,3 +37,32 @@ class SalaryPayoutModel(Base2):
     bonus = Column(Float, default=0.0)
     deductions = Column(Float, default=0.0)
     paid_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+
+class CustomerReturnModel(Base2):
+    __tablename__ = "customer_returns"
+
+    id = Column(String, primary_key=True, index=True)
+    return_code = Column(String, index=True, nullable=False)
+    customer_name = Column(String, nullable=False)
+    customer_phone = Column(String, nullable=True)
+    original_invoice = Column(String, nullable=True)
+    items_json = Column(String, nullable=False)
+    total_value = Column(Float, nullable=False)
+    refund_type = Column(String, default="CASH")
+    condition = Column(String, default="Restocked")
+    status = Column(String, default="Completed")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+
+class SupplierReturnModel(Base2):
+    __tablename__ = "supplier_returns"
+
+    id = Column(String, primary_key=True, index=True)
+    return_code = Column(String, index=True, nullable=False)
+    supplier_name = Column(String, nullable=False)
+    purchase_bill = Column(String, nullable=True)
+    items_json = Column(String, nullable=False)
+    total_value = Column(Float, nullable=False)
+    reason = Column(String, nullable=True)
+    status = Column(String, default="Completed")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+

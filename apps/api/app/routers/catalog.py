@@ -21,37 +21,37 @@ from app.services.backup_service import backup_all_data_to_hard_drive
 _PRODUCT_CACHE = []
 _LAST_CACHE_TIME = 0.0
 
+def invalidate_product_cache():
+    global _PRODUCT_CACHE, _LAST_CACHE_TIME
+    _PRODUCT_CACHE = []
+    _LAST_CACHE_TIME = 0.0
+
 @router.get("/products", response_model=list[ProductResponse])
 async def get_products(db: AsyncSession = Depends(get_db1)):
     global _PRODUCT_CACHE, _LAST_CACHE_TIME
     import time
 
-    # Return cached products instantly if retrieved within last 10 seconds
+    # 1. RAM Cache: Sub-millisecond instant memory return
     if _PRODUCT_CACHE and (time.time() - _LAST_CACHE_TIME < 10.0):
         return _PRODUCT_CACHE
 
+    # 2. Local-First SQLite File: Direct SSD read from PC local database (< 2ms)
     local_prods = get_all_local_products()
-    local_map = {p["id"]: p for p in local_prods}
+    if local_prods:
+        _PRODUCT_CACHE = local_prods
+        _LAST_CACHE_TIME = time.time()
+        return local_prods
 
+    # 3. Initial Seed: Fetch once from remote DB1 if local SQLite is empty
+    local_map = {}
     if db is not None:
         try:
-            result = await asyncio.wait_for(db.execute(select(ProductModel)), timeout=1.5)
+            result = await asyncio.wait_for(db.execute(select(ProductModel)), timeout=0.8)
             prods = result.scalars().all()
             if prods:
                 db_items_to_sync = []
                 for p in prods:
-                    db_items_to_sync.append({
-                        "id": p.id,
-                        "odoo_id": getattr(p, 'odoo_id', None),
-                        "name": p.name,
-                        "price": p.price,
-                        "cost_price": p.cost_price,
-                        "sku": p.sku or p.id[:8],
-                        "barcode": p.barcode,
-                        "category": p.category or "General",
-                        "stock": p.stock or 0
-                    })
-                    local_map[p.id] = {
+                    item_dict = {
                         "id": p.id,
                         "odoo_id": getattr(p, 'odoo_id', None),
                         "name": p.name,
@@ -63,10 +63,9 @@ async def get_products(db: AsyncSession = Depends(get_db1)):
                         "category": p.category or "General",
                         "image_url": getattr(p, 'image_url', None),
                         "stock": p.stock or 0,
-                        "created_at": p.created_at.isoformat() if getattr(p, 'created_at', None) else None,
-                        "updated_at": p.updated_at.isoformat() if getattr(p, 'updated_at', None) else None,
                     }
-                # Fast bulk save into SQLite in background/single transaction
+                    db_items_to_sync.append(item_dict)
+                    local_map[p.id] = item_dict
                 try:
                     save_products_bulk_locally(db_items_to_sync)
                 except Exception as sq_err:
@@ -126,15 +125,14 @@ async def create_product(product: ProductCreate, db: AsyncSession = Depends(get_
             await db.commit()
             await db.refresh(db_product)
 
-            try:
-                await backup_all_data_to_hard_drive()
-            except Exception:
-                pass
 
+
+            invalidate_product_cache()
             return db_product
         except Exception as e:
             print(f"Notice: Remote DB1 unreachable offline ({e}). Product saved in local SQLite database.")
 
+    invalidate_product_cache()
     return data
 
 
@@ -170,20 +168,20 @@ async def update_product(product_id: str, product_update: ProductCreate, db: Asy
 
             await db.commit()
             await db.refresh(db_product)
-            try:
-                await backup_all_data_to_hard_drive()
-            except Exception:
-                pass
+            invalidate_product_cache()
             return db_product
+        invalidate_product_cache()
         return data
     except Exception as e:
         print(f"DB1 unreachable during update ({e}). Saved locally to SQLite.")
+        invalidate_product_cache()
         return data
 
 @router.delete("/products/{product_id}")
 async def delete_product(product_id: str, db: AsyncSession = Depends(get_db1)):
     try:
         delete_local_product(product_id)
+        invalidate_product_cache()
     except Exception:
         pass
 
@@ -193,14 +191,13 @@ async def delete_product(product_id: str, db: AsyncSession = Depends(get_db1)):
         if db_product:
             await db.delete(db_product)
             await db.commit()
-            try:
-                await backup_all_data_to_hard_drive()
-            except Exception:
-                pass
+            invalidate_product_cache()
             return {"message": "Product deleted from DB1 and SQLite successfully"}
+        invalidate_product_cache()
         return {"message": "Product deleted from local SQLite"}
     except Exception as e:
         print(f"DB1 unreachable ({e}). Product deleted from local SQLite.")
+        invalidate_product_cache()
         return {"message": "Product deleted from local SQLite (DB1 offline)"}
 
 @router.post("/products/sync-pending")

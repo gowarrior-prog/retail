@@ -100,10 +100,12 @@ export default function AddClothDrawerModal({ onClose }: AddClothDrawerModalProp
     try {
       const res = await createProduct(newProd);
       addProduct(res);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('pos-data-updated'));
       handleAnimatedClose();
       showCatalogToast('✓ Product Added to Catalog', 'add');
     } catch {
       addProduct({ id: `local-${Date.now()}`, ...newProd } as any);
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('pos-data-updated'));
       handleAnimatedClose();
       showCatalogToast('✓ Product Added to Catalog', 'add');
     } finally {

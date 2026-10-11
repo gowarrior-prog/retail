@@ -30,3 +30,17 @@ export async function deleteEmployee(id: string): Promise<any> {
     method: 'DELETE',
   });
 }
+
+export async function payEmployeeSalary(employee_id: string, amount: number, note?: string): Promise<any> {
+  return await apiFetch<any>(`/employees/${employee_id}/salary`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, note }),
+  });
+}
+
+export async function updateEmployeeLeave(employee_id: string, leave_status: string, leave_reason?: string): Promise<any> {
+  return await apiFetch<any>(`/employees/${employee_id}/leave`, {
+    method: 'POST',
+    body: JSON.stringify({ leave_status, leave_reason }),
+  });
+}

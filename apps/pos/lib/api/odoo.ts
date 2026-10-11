@@ -1,14 +1,5 @@
 import { apiFetch } from './client';
 
-export async function fetchKhata(): Promise<any[]> {
-  try {
-    const raw = await apiFetch<any[]>('/khata');
-    return Array.isArray(raw) ? raw : [];
-  } catch {
-    return [];
-  }
-}
-
 export async function syncOdoo(): Promise<any> {
   return await apiFetch<any>('/sync-odoo', { method: 'POST' });
 }

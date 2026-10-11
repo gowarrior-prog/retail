@@ -1,7 +1,7 @@
 'use client';
 
 import { useProductStore } from '@/stores/useProductStore';
-import { Shirt, ShoppingBag, Trash2 } from 'lucide-react';
+import { Shirt, ShoppingBag, Trash2, AlertCircle } from 'lucide-react';
 
 interface CatalogGridProps {
   searchQuery: string;
@@ -44,7 +44,7 @@ export default function CatalogGrid({
           <div className="w-14 h-14 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center mb-2.5">
             <ShoppingBag className="w-7 h-7 text-slate-300" />
           </div>
-          <p className="text-sm font-bold text-slate-700">items not found</p>
+          <p className="text-sm font-bold text-slate-700">No products found</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -52,15 +52,20 @@ export default function CatalogGrid({
             const categoryName = (item.category || 'General').toUpperCase();
             const skuVal = item.sku || item.barcode || '';
             const stockQty = item.stock ?? item.quantity ?? 0;
+            const isOutOfStock = stockQty <= 0;
             const hasRealImage = Boolean(item.image_url);
 
             return (
               <div
                 key={item.id || idx}
                 onClick={() => onSelectProduct(item)}
-                className="bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-2xs hover:shadow-md hover:border-emerald-500 transition-all duration-200 cursor-pointer group flex flex-col justify-between relative active:scale-[0.99]"
+                className={`rounded-2xl border overflow-hidden shadow-2xs transition-all duration-200 cursor-pointer group flex flex-col justify-between relative active:scale-[0.99] ${
+                  isOutOfStock
+                    ? 'bg-rose-50/30 border-rose-200 hover:border-rose-400 hover:shadow-md'
+                    : 'bg-white border-slate-200/90 hover:border-emerald-500 hover:shadow-md'
+                }`}
               >
-                {/* Top-Left Single-Click Instant Delete Button */}
+                {/* Top-Left Single-Click Delete Button */}
                 <button
                   type="button"
                   onClick={(e) => {
@@ -80,18 +85,32 @@ export default function CatalogGrid({
                     <img
                       src={item.image_url}
                       alt={item.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className={`w-full h-full object-cover transition-transform duration-300 ${
+                        isOutOfStock ? 'filter grayscale brightness-90' : 'group-hover:scale-105'
+                      }`}
                       loading="lazy"
                     />
-                    <div className="absolute top-2 right-2 bg-[#1b3830]/90 text-emerald-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shadow-2xs border border-emerald-500/20">
-                      STK: {stockQty}
+                    <div
+                      className={`absolute top-2 right-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shadow-2xs border ${
+                        isOutOfStock
+                          ? 'bg-rose-600 text-white border-rose-700'
+                          : 'bg-[#1b3830]/90 text-emerald-300 border-emerald-500/20'
+                      }`}
+                    >
+                      {isOutOfStock ? `STK: ${stockQty} (OUT)` : `STK: ${stockQty}`}
                     </div>
                   </div>
                 ) : (
                   /* Stock Badge floating top-right if no image */
                   <div className="flex justify-end p-3 pb-0">
-                    <span className="bg-[#1b3830] text-emerald-300 text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shadow-2xs border border-emerald-500/20">
-                      STK: {stockQty}
+                    <span
+                      className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-md shadow-2xs border ${
+                        isOutOfStock
+                          ? 'bg-rose-600 text-white border-rose-700 font-extrabold'
+                          : 'bg-[#1b3830] text-emerald-300 border-emerald-500/20'
+                      }`}
+                    >
+                      {isOutOfStock ? `STK: ${stockQty} (OUT)` : `STK: ${stockQty}`}
                     </span>
                   </div>
                 )}
@@ -100,7 +119,7 @@ export default function CatalogGrid({
                 <div className="p-3.5 flex-1 flex flex-col justify-between gap-2">
                   <div>
                     {/* Category & SKU row */}
-                    <div className="flex items-center justify-between text-[9px] font-bold text-slate-400 tracking-wider">
+                    <div className="flex items-center justify-between text-[9px] font-bold tracking-wider">
                       <span className="uppercase text-slate-500">{categoryName}</span>
                       {skuVal && <span className="font-mono text-slate-400">{skuVal}</span>}
                     </div>
@@ -112,13 +131,22 @@ export default function CatalogGrid({
                   </div>
 
                   {/* Price & Unit Row */}
-                  <div className="pt-2 border-t border-slate-100 flex flex-col">
-                    <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-wider font-mono">
-                      SUIT PACK
-                    </span>
-                    <span className="text-sm font-black text-[#1b3830] font-mono mt-0.5">
-                      PKR {Number(item.price || 0).toLocaleString()}
-                    </span>
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <div className="flex flex-col">
+                      <span className="text-[9.5px] font-extrabold text-slate-400 uppercase tracking-wider font-mono">
+                        SUIT PACK
+                      </span>
+                      <span className="text-sm font-black text-[#1b3830] font-mono mt-0.5">
+                        PKR {Number(item.price || 0).toLocaleString()}
+                      </span>
+                    </div>
+
+                    {isOutOfStock && (
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-100/80 px-2 py-0.5 rounded-full border border-rose-200 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 text-rose-600" />
+                        Restock
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, Check, Banknote, Building2, Smartphone, Receipt } from 'lucide-react';
-import { createKhataCustomer } from '@/lib/api';
+import { addKhataTransaction } from '@/lib/api';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
 
@@ -41,10 +41,11 @@ export default function ReceivePaymentModal({ client, onClose, onSuccess }: Rece
     setIsSubmitting(true);
     try {
       const newBal = Math.max(0, currentDue - paymentAmount);
-      await createKhataCustomer({
-        customer_name: client.customer_name || client.name,
-        phone: client.phone || '0300-0000000',
-        initial_balance: newBal,
+      await addKhataTransaction({
+        khata_id: client.id,
+        type: 'CREDIT',
+        amount: paymentAmount,
+        description: note || `Payment received via ${paymentMethod}`,
       });
       playToastAudio('add');
       showCatalogToast(`Received Rs. ${paymentAmount.toLocaleString()} payment from ${client.customer_name || client.name}!`, 'add');

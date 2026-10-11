@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, ShoppingBag } from 'lucide-react';
-import { createKhataCustomer } from '@/lib/api';
+import { addKhataTransaction } from '@/lib/api';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
 
@@ -34,10 +34,11 @@ export default function AddBillModal({ client, onClose, onSuccess }: AddBillModa
     setIsSubmitting(true);
     try {
       const newBal = (client.total_balance || 0) + billAmount;
-      await createKhataCustomer({
-        customer_name: client.customer_name || client.name,
-        phone: client.phone || '0300-0000000',
-        initial_balance: newBal,
+      await addKhataTransaction({
+        khata_id: client.id,
+        type: 'DEBIT',
+        amount: billAmount,
+        description: `New bill added`,
       });
       playToastAudio('add');
       showCatalogToast(`Added Rs. ${billAmount.toLocaleString()} bill to ${client.customer_name}'s Khata!`, 'add');

@@ -46,16 +46,33 @@ export default function Header() {
     <>
       {/* Top Clean Application Header matching reference design */}
       <header className="bg-white border-b border-slate-200 px-6 pr-8 py-2.5 flex items-center justify-between shadow-2xs shrink-0 font-sans z-20">
-        {/* Brand identity */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full border border-slate-300 flex items-center justify-center bg-slate-50 text-slate-700 font-bold shadow-2xs">
-            <span className="text-[11px] font-black tracking-tighter">BC</span>
+        
+       {/* Brand identity */}
+        <div className="flex items-center gap-3.5">
+          {/* Clean High-DPI Emblem Icon Container */}
+          <div className="h-12 w-12 flex items-center justify-center shrink-0">
+            <img 
+              src="/Screenshot 2026-09-26 210204.svg" 
+              alt="Bilal Cloth Emblem" 
+              className="w-full h-full object-contain drop-shadow-2xs select-none"
+              style={{
+                imageRendering: '-webkit-optimize-contrast',
+                transform: 'translateZ(0)',
+                backfaceVisibility: 'hidden',
+              }}
+            />
           </div>
-          <span className="font-bold text-sm tracking-tight text-slate-800 uppercase font-sans">
-            BILAL CLOTH & SILK CENTER
-          </span>
+          
+          {/* Next.js Clean Typography - 100% Crisp & Sharp on All Screens */}
+          <div className="flex flex-col justify-center">
+            <h1 className="font-black tracking-tight text-[#1b3830] font-bold leading-none antialiased">
+              BILAL CLOTH & SILK CENTER
+            </h1>
+            <span className="text-[11px] font-extrabold text-slate-500 tracking-wider uppercase font-mono mt-1">
+              CLOTH HOUSE • NAROWAL
+            </span>
+          </div>
         </div>
-
         {/* Header Actions & Cashier Profile */}
         <div className="flex items-center gap-3">
           {/* Cashier User Pill Button */}

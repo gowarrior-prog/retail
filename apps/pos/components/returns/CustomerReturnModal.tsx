@@ -5,6 +5,7 @@ import { X, RotateCcw, Search, Check, RefreshCw, AlertTriangle, CreditCard, Bank
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
 import { fetchBillingHistory } from '@/lib/api';
+import { useProductStore } from '@/stores/useProductStore';
 
 interface CustomerReturnModalProps {
   onClose: () => void;
@@ -51,7 +52,9 @@ export default function CustomerReturnModal({ onClose, onSuccess }: CustomerRetu
     setTimeout(() => onClose(), 250);
   };
 
-  const parseItems = (jsonStr: any) => {
+  const parseItems = (inv: any) => {
+    if (Array.isArray(inv.items)) return inv.items;
+    const jsonStr = inv.item_details_json;
     if (!jsonStr) return [];
     if (Array.isArray(jsonStr)) return jsonStr;
     try { return JSON.parse(jsonStr); } catch { return []; }
@@ -59,14 +62,15 @@ export default function CustomerReturnModal({ onClose, onSuccess }: CustomerRetu
 
   const handleSelectInvoice = (inv: any) => {
     setSelectedInvoice(inv);
-    const parsed = parseItems(inv.item_details_json);
+    const parsed = parseItems(inv);
     const mapped = parsed.map((item: any) => ({
       name: item.name || item.product_name || 'Fabric Item',
       qty: 1,
-      maxQty: item.quantity || 1,
-      price: item.price || 0,
+      maxQty: Number(item.quantity || item.qty || 1),
+      price: Number(item.price || item.unit_price || inv.total_amount || 0),
     }));
-    setReturnItems(mapped.length > 0 ? mapped : [{ name: 'Purchased Fabric', qty: 1, maxQty: 5, price: 1500 }]);
+    const invTotal = Number(inv.total_amount || inv.grand_total || 0);
+    setReturnItems(mapped.length > 0 ? mapped : [{ name: 'Purchased Fabric Item', qty: 1, maxQty: 1, price: invTotal || 1500 }]);
   };
 
   const totalReturnValue = returnItems.reduce((s, i) => s + (i.qty * i.price), 0);
@@ -134,6 +138,13 @@ export default function CustomerReturnModal({ onClose, onSuccess }: CustomerRetu
 
       playToastAudio('add');
       showCatalogToast(`Customer Return ${returnCode} processed successfully!`, 'add');
+
+      // REAL-TIME REFRESH: Reload product stock and notify open pages
+      useProductStore.getState().loadProducts(true).catch(() => {});
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('pos-data-updated'));
+      }
+
       onSuccess(newReturn);
       handleAnimatedClose();
     } catch (err: any) {
@@ -145,11 +156,10 @@ export default function CustomerReturnModal({ onClose, onSuccess }: CustomerRetu
 
   const filteredInvoices = recentInvoices.filter((inv) => {
     if (!invoiceQuery.trim()) return true;
-    const q = invoiceQuery.toLowerCase();
-    return (
-      inv.invoice_number?.toLowerCase().includes(q) ||
-      inv.customer_phone?.toLowerCase().includes(q)
-    );
+    const q = invoiceQuery.toLowerCase().replace(/^#/, '');
+    const invNo = String(inv.invoice_number || '').toLowerCase().replace(/^#/, '');
+    const phone = String(inv.customer_phone || '').toLowerCase();
+    return invNo.includes(q) || q.includes(invNo) || phone.includes(q);
   });
 
   return (

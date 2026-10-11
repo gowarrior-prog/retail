@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  X,
   Search,
   Printer,
   Trash2,
@@ -22,9 +23,11 @@ import {
 import { fetchKhata, deleteKhataCustomer, clearAllKhataRecords } from '@/lib/api';
 import { showProfessionalAlert } from '@/lib/alert';
 import { showCatalogToast } from '@/lib/toast';
+import { exportToCSV } from '@/lib/utils';
 import AddKhataModal from '@/components/khata/AddKhataModal';
 import ReceivePaymentModal from '@/components/khata/ReceivePaymentModal';
 import AddBillModal from '@/components/khata/AddBillModal';
+import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal';
 
 interface LedgerItem {
   id: string;
@@ -87,100 +90,68 @@ export default function KhataPage() {
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [showReceiveModal, setShowReceiveModal] = useState<boolean>(false);
   const [showAddBillModal, setShowAddBillModal] = useState<boolean>(false);
+  const [deleteModalTarget, setDeleteModalTarget] = useState<KhataClient | null>(null);
 
-  // Mount effect to prevent Next.js SSR Hydration errors
-  useEffect(() => {
-    setIsMounted(true);
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('pos_khata_records_v4');
-      if (stored !== null) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            const clean = deduplicateClients(parsed);
-            setKhataRecords(clean);
-            if (clean.length > 0 && clean[0]?.id) setSelectedId(clean[0].id);
-            return;
-          }
-        } catch {}
+  const loadApiKhata = React.useCallback(async () => {
+    try {
+      const data = await fetchKhata();
+      if (Array.isArray(data) && data.length > 0) {
+        const mapped: KhataClient[] = data.map((apiItem: any) => {
+          const custName = apiItem.customer_name || apiItem.name || 'Khata Client';
+          const id = String(apiItem.id || `khata-api-${Date.now()}`);
+          const initials = custName
+            .split(' ')
+            .map((n: string) => n[0])
+            .join('')
+            .slice(0, 2)
+            .toUpperCase();
+          const bal = Number(apiItem.total_balance || apiItem.balance || 0);
+
+          return {
+            id,
+            customer_name: custName,
+            phone: apiItem.phone || '0300-0000000',
+            since: 'Active',
+            total_orders: 1,
+            total_balance: bal,
+            time_ago: 'Recent',
+            initials,
+            avatar_color: 'bg-[#1b3830]',
+            ledger:
+              bal > 0
+                ? [
+                    {
+                      id: `leg-api-${id}`,
+                      date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+                      description: 'Opening Balance',
+                      type: 'Invoice' as const,
+                      debit: bal,
+                      credit: 0,
+                      balanceText: `Rs. ${bal.toLocaleString()} DUE`,
+                      is_due: true,
+                    },
+                  ]
+                : [],
+          };
+        });
+        const clean = deduplicateClients(mapped);
+        setKhataRecords(clean);
+        if (clean.length > 0 && clean[0]?.id) setSelectedId(clean[0].id);
       }
-      setKhataRecords([]);
+    } catch (err) {
+      console.error('Khata backend sync notice:', err);
     }
   }, []);
 
-  // Save to localStorage whenever khataRecords changes
+  // Mount & load from backend SQL API only — no browser storage for security
   useEffect(() => {
-    if (isMounted && typeof window !== 'undefined') {
-      localStorage.setItem('pos_khata_records_v4', JSON.stringify(khataRecords));
-    }
-  }, [khataRecords, isMounted]);
-
-  // Load from backend API if available and merge cleanly without duplicates
-  useEffect(() => {
-    if (!isMounted) return;
-    async function loadApiKhata() {
-      try {
-        const data = await fetchKhata();
-        if (Array.isArray(data) && data.length > 0) {
-          setKhataRecords((prev) => {
-            const existingMap = new Map<string, KhataClient>();
-            prev.forEach((item) => {
-              const k = (item.customer_name || '').toLowerCase().trim();
-              if (k) existingMap.set(k, item);
-            });
-
-            const newFromApi: KhataClient[] = [];
-            data.forEach((apiItem: any) => {
-              const custName = apiItem.customer_name || apiItem.name || 'Khata Client';
-              const k = custName.toLowerCase().trim();
-              if (!existingMap.has(k)) {
-                const id = String(apiItem.id || `khata-api-${Date.now()}`);
-                const initials = custName
-                  .split(' ')
-                  .map((n: string) => n[0])
-                  .join('')
-                  .slice(0, 2)
-                  .toUpperCase();
-                const bal = Number(apiItem.total_balance || apiItem.balance || 0);
-
-                newFromApi.push({
-                  id,
-                  customer_name: custName,
-                  phone: apiItem.phone || '0300-0000000',
-                  since: 'Active',
-                  total_orders: 1,
-                  total_balance: bal,
-                  time_ago: 'Recent',
-                  initials,
-                  avatar_color: 'bg-[#1b3830]',
-                  ledger:
-                    bal > 0
-                      ? [
-                          {
-                            id: `leg-api-${id}`,
-                            date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-                            description: 'Opening Balance',
-                            type: 'Invoice',
-                            debit: bal,
-                            credit: 0,
-                            balanceText: `Rs. ${bal.toLocaleString()} DUE`,
-                            is_due: true,
-                          },
-                        ]
-                      : [],
-                });
-              }
-            });
-
-            return deduplicateClients([...prev, ...newFromApi]);
-          });
-        }
-      } catch (err) {
-        console.error('Khata backend sync notice:', err);
-      }
-    }
+    setIsMounted(true);
     loadApiKhata();
-  }, [isMounted]);
+
+    const handleLiveUpdate = () => loadApiKhata();
+    window.addEventListener('pos-data-updated', handleLiveUpdate);
+    return () => window.removeEventListener('pos-data-updated', handleLiveUpdate);
+  }, [loadApiKhata]);
 
   // Filter clients based on search query and filter tabs
   const filteredClients = useMemo(() => {
@@ -226,14 +197,19 @@ export default function KhataPage() {
   }, [activeClient]);
 
   // Handle Single Client Deletion
-  const handleDeleteClient = async () => {
+  const handleDeleteClient = () => {
     if (!activeClient) return;
-    if (!confirm(`Are you sure you want to delete Khata account for ${activeClient.customer_name}?`)) return;
+    setDeleteModalTarget(activeClient);
+  };
 
+  const confirmDeleteClient = async () => {
+    if (!deleteModalTarget) return;
+    const target = deleteModalTarget;
+    setDeleteModalTarget(null);
     try {
-      await deleteKhataCustomer(activeClient.id).catch(() => {});
-      showCatalogToast(`Deleted Khata account: ${activeClient.customer_name}`, 'delete');
-      const updated = khataRecords.filter((c) => String(c.id) !== String(activeClient.id));
+      await deleteKhataCustomer(target.id).catch(() => {});
+      showCatalogToast(`Deleted Khata account: ${target.customer_name}`, 'delete');
+      const updated = khataRecords.filter((c) => String(c.id) !== String(target.id));
       setKhataRecords(updated);
       setSelectedId(updated[0]?.id || null);
     } catch (err: any) {
@@ -570,11 +546,26 @@ export default function KhataPage() {
                   </button>
 
                   <button
-                    onClick={() => window.print()}
+                    onClick={() => {
+                      if (!activeClient) return;
+                      const rows = (activeClient.ledger || []).map((item) => [
+                        item.date,
+                        item.description,
+                        item.type,
+                        item.debit || 0,
+                        item.credit || 0,
+                      ]);
+                      exportToCSV(
+                        `${activeClient.customer_name.replace(/\s+/g, '_')}_khata_ledger.csv`,
+                        ['Date', 'Description', 'Type', 'Debit (Invoice)', 'Credit (Payment)'],
+                        rows
+                      );
+                      showCatalogToast(`Downloaded Khata ledger for ${activeClient.customer_name}`, 'add');
+                    }}
                     className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
                   >
                     <Download className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Download PDF</span>
+                    <span>Download Statement</span>
                   </button>
 
               
@@ -782,6 +773,17 @@ export default function KhataPage() {
           client={activeClient}
           onClose={() => setShowAddBillModal(false)}
           onSuccess={handleAddBillSuccess}
+        />
+      )}
+
+      {/* Custom Delete Khata Account Modal */}
+      {deleteModalTarget && (
+        <DeleteConfirmationModal
+          title="Confirm Account Deletion"
+          entityName={deleteModalTarget.customer_name}
+          message={`Are you sure you want to delete account for ${deleteModalTarget.customer_name}?`}
+          onClose={() => setDeleteModalTarget(null)}
+          onConfirm={confirmDeleteClient}
         />
       )}
     </div>

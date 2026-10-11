@@ -4,8 +4,7 @@ import React, { useState } from 'react';
 import { Printer, X, CheckCircle2, Loader2, ExternalLink } from 'lucide-react';
 import ThermalReceiptContent from './ThermalReceiptContent';
 import { generateThermalReceiptHtml } from './ThermalReceiptPrintStyles';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+import { getApiBaseUrl } from '@/lib/api';
 
 export default function ThermalReceiptModal(props: any) {
   const receiptData = props.receiptData || props.receipt || {};
@@ -17,7 +16,8 @@ export default function ThermalReceiptModal(props: any) {
     setPrinting(true);
     setPrintResult(null);
     try {
-      const res = await fetch(`${API_URL}/printer/print-receipt`, {
+      const apiBase = getApiBaseUrl();
+      const res = await fetch(`${apiBase}/printer/print-receipt`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(receiptData),

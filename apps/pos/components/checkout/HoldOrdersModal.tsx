@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Search, RefreshCw, Printer, Trash2, Receipt, ArrowRight, Eye, Download, FileText } from 'lucide-react';
 import { useCartStore } from '@/stores/useCartStore';
 import { fetchBillingHistory } from '@/lib/api';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, exportToCSV } from '@/lib/utils';
 import ThermalReceiptModal from './ThermalReceiptModal';
 
 /* ────────────────── Payment Mode Badge Color Map ────────────────── */
@@ -60,13 +60,7 @@ export default function HoldOrdersModal({ onClose }: { onClose: () => void }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [inspectReceiptData, setInspectReceiptData] = useState<any | null>(null);
 
-  // Load on mount + trigger slide-in
-  useEffect(() => {
-    requestAnimationFrame(() => setSlideIn(true));
-    loadInvoices();
-  }, []);
-
-  const loadInvoices = async () => {
+  const loadInvoices = React.useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await fetchBillingHistory();
@@ -76,7 +70,17 @@ export default function HoldOrdersModal({ onClose }: { onClose: () => void }) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
+
+  // Load on mount + trigger slide-in & listen for live updates
+  useEffect(() => {
+    requestAnimationFrame(() => setSlideIn(true));
+    loadInvoices();
+
+    const handleLiveUpdate = () => loadInvoices();
+    window.addEventListener('pos-data-updated', handleLiveUpdate);
+    return () => window.removeEventListener('pos-data-updated', handleLiveUpdate);
+  }, [loadInvoices]);
 
   const handleClose = useCallback(() => {
     setSlideIn(false);
@@ -262,11 +266,23 @@ export default function HoldOrdersModal({ onClose }: { onClose: () => void }) {
 
         {/* ─── Footer Buttons ─── */}
         <div className="px-4 py-3 border-t border-slate-200 bg-white flex items-center gap-2 shrink-0">
-          <button className="flex-1 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-50 cursor-pointer flex items-center justify-center gap-1.5 transition">
+          <button
+            onClick={() => {
+              if (invoices.length === 0) return;
+              const headers = ['Invoice Number', 'Date', 'Customer', 'Cashier', 'Payment Mode', 'Total Amount'];
+              const rows = invoices.map(inv => [
+                inv.invoice_number,
+                inv.created_at || 'N/A',
+                inv.customer_name || inv.customer_phone || 'Walk-in',
+                inv.cashier_name || 'Admin',
+                inv.payment_mode || 'CASH',
+                inv.total_amount || 0
+              ]);
+              exportToCSV('bill_history_report.csv', headers, rows);
+            }}
+            className="flex-1 px-3 py-2 border border-slate-200 bg-white text-slate-700 rounded-xl text-xs font-medium hover:bg-slate-50 cursor-pointer flex items-center justify-center gap-1.5 transition"
+          >
             <Download className="w-3.5 h-3.5" /> Export Day Report
-          </button>
-          <button className="flex-1 px-3 py-2 bg-[#1b3830] text-white rounded-xl text-xs font-medium hover:bg-[#142e27] cursor-pointer flex items-center justify-center gap-1.5 transition">
-            <FileText className="w-3.5 h-3.5" /> Print Summary
           </button>
         </div>
       </div>

@@ -15,6 +15,7 @@ interface ProductState {
   addProduct: (product: Product) => void;
   updateProductInStore: (id: string, product: Product) => void;
   removeProductFromStore: (id: string) => void;
+  deductStockInStore: (items: { product_id: string; quantity: number }[]) => void;
 }
 
 const getInitialProducts = (): Product[] => {
@@ -122,5 +123,28 @@ export const useProductStore = create<ProductState>((set, get) => ({
         return matchesSearch && matchesCategory;
       }),
     });
+  },
+
+  deductStockInStore: (items) => {
+    const { products, selectedCategory, searchQuery } = get();
+    const itemMap = new Map(items.map(i => [i.product_id, i.quantity]));
+
+    const updated = products.map(p => {
+      if (itemMap.has(p.id)) {
+        const qty = itemMap.get(p.id) || 0;
+        const newStock = Math.max(0, (p.stock || 0) - qty);
+        return { ...p, stock: newStock };
+      }
+      return p;
+    });
+
+    const q = searchQuery.toLowerCase().trim();
+    const filtered = updated.filter(p => {
+      const matchesSearch = !q || p.name.toLowerCase().includes(q) || (p.barcode && p.barcode.includes(q));
+      const matchesCategory = selectedCategory === 'All' || p.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+
+    set({ products: updated, filteredProducts: filtered });
   },
 }));

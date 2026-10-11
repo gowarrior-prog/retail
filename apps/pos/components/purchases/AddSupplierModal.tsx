@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import { X, Truck, Phone, DollarSign } from 'lucide-react';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
+import { SupplierCreateSchema } from '@/lib/validators';
+import { addPurchase } from '@/lib/api';
 
 interface AddSupplierModalProps {
   onClose: () => void;
@@ -16,6 +18,7 @@ export default function AddSupplierModal({ onClose, onSuccess }: AddSupplierModa
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [balance, setBalance] = useState<number>(0);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
@@ -30,7 +33,19 @@ export default function AddSupplierModal({ onClose, onSuccess }: AddSupplierModa
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    setErrorMsg(null);
+
+    const validationResult = SupplierCreateSchema.safeParse({
+      name: name.trim(),
+      phone: phone.trim(),
+      balance: Number(balance) || 0,
+    });
+
+    if (!validationResult.success) {
+      setErrorMsg(validationResult.error.issues[0]?.message || 'Invalid supplier details');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const initials = name
@@ -74,12 +89,28 @@ export default function AddSupplierModal({ onClose, onSuccess }: AddSupplierModa
             : [],
       };
 
+      try {
+        await addPurchase({
+          supplier_name: name.trim(),
+          item_name: 'Opening Stock Balance',
+          quantity: 1,
+          total_cost: bal > 0 ? bal : 0,
+          paid_amount: 0,
+          notes: phone.trim() || 'Supplier Account Registration',
+        });
+      } catch (apiErr) {
+        console.warn('Backend purchase API sync notice:', apiErr);
+      }
+
       playToastAudio('add');
       showCatalogToast(`New Supplier '${name.trim()}' Created!`, 'add');
       onSuccess(newSupplier);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('pos-data-updated'));
+      }
       handleAnimatedClose();
     } catch (err: any) {
-      alert(`Notice: ${err.message || 'Error creating supplier'}`);
+      setErrorMsg(err.message || 'Error creating supplier');
     } finally {
       setIsSubmitting(false);
     }
@@ -112,11 +143,17 @@ export default function AddSupplierModal({ onClose, onSuccess }: AddSupplierModa
           </button>
         </div>
 
+        {errorMsg && (
+          <div className="mx-4 mt-3 p-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl font-medium">
+            {errorMsg}
+          </div>
+        )}
+
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-4 bg-slate-50 flex flex-col gap-3.5">
           <div>
             <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              SUPPLIER / WHOLESALER NAME
+              SUPPLIER / WHOLESALER NAME *
             </label>
             <input
               type="text"
@@ -172,7 +209,7 @@ export default function AddSupplierModal({ onClose, onSuccess }: AddSupplierModa
             <button
               type="submit"
               disabled={isSubmitting || !name.trim()}
-              className="px-5 py-2 bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.99] disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center justify-center shadow-xs transition cursor-pointer"
+              className="px-5 py-2 bg-[#1b3830] hover:bg-[#142e27] text-white font-bold text-xs rounded-xl flex items-center justify-center shadow-xs transition cursor-pointer"
             >
               <span>{isSubmitting ? 'Creating...' : 'Save Supplier'}</span>
             </button>

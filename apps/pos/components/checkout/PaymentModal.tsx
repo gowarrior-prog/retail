@@ -3,14 +3,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, CreditCard, Banknote, Printer } from 'lucide-react';
 import { useCartStore } from '@/stores/useCartStore';
-import { posCheckout } from '@/lib/api';
+import { useProductStore } from '@/stores/useProductStore';
+import { posCheckout, getApiBaseUrl } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { showProfessionalAlert } from '@/lib/alert';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
 import ThermalReceiptContent from './ThermalReceiptContent';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 export default function PaymentModal({ onClose }: { onClose: () => void }) {
   const { items, grandTotal, subtotal, discountTotal, clearCart, cashierName } = useCartStore();
@@ -63,22 +62,26 @@ export default function PaymentModal({ onClose }: { onClose: () => void }) {
         cashier_name: currentCashier,
       };
 
-      // 2. Direct Raw Print to Speed-X printer
-      try {
-        await fetch(`${API_URL}/printer/print-receipt`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(printPayload),
-        });
-      } catch (printErr) {
-        console.error('Direct print error:', printErr);
-      }
+      // 2. INSTANT Direct ESC/POS Print (Non-blocking background call)
+      const apiBase = getApiBaseUrl();
+      fetch(`${apiBase}/printer/print-receipt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(printPayload),
+      }).catch((printErr) => console.error('Direct print notice:', printErr));
 
-      // 3. Play Success Audio Chime & White Toast
+      // 3. Play Success Audio & Toast
       playToastAudio('print');
       showCatalogToast('Bill printed & checkout completed!', 'add');
 
-      // 4. Clear Cart & Close Modal without opening additional page/modal
+      // 4. OPTIMISTIC 0ms INSTANT UI STOCK DEDUCTION & BACKGROUND SYNC
+      useProductStore.getState().deductStockInStore(checkoutPayload.items);
+      useProductStore.getState().loadProducts(true).catch(() => {});
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('pos-data-updated'));
+      }
+
+      // 5. Clear Cart & Close Modal
       clearCart();
       handleAnimatedClose();
     } catch (err: any) {

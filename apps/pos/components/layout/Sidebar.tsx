@@ -4,31 +4,13 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   ShoppingBag,
-  Grid,
-  Clock,
   RotateCcw,
   Users,
-  UserCheck,
   Settings,
-  ShoppingCartPlus,
   LucideShoppingCart,
-  LockKeyholeOpenIcon,
   BookOpenCheck,
-  ChartAreaIcon,
-  ChartBar,
-  ChartBarIncreasing,
-  ChartCandlestickIcon,
-  ChartBarIncreasingIcon,
-  AreaChart,
   TruckElectric,
-  Rotate3D,
-  Rotate3d,
-  RotateCcwClockIcon,
-  RotateCcwKey,
-  RotateCcwSquare,
-  ArrowBigLeftDash,
-  ArrowDownAZIcon,
-  CircleArrowOutUpLeftIcon,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCartStore } from '@/stores/useCartStore';
@@ -43,7 +25,7 @@ const navItemsTop = [
 ];
 
 const navItemsBottom = [
-  { href: '/analytics', label: 'Analytics', icon: ChartBarIncreasingIcon},
+  { href: '/analytics', label: 'Analytics', icon: BarChart3},
   { href: '/settings', label: 'Setup', icon: Settings},
 ];
 

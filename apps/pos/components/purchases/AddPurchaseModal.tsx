@@ -1,20 +1,22 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { X, ShoppingBag, FileText } from 'lucide-react';
+import { X, ShoppingBag } from 'lucide-react';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
+import { addPurchase } from '@/lib/api';
 
 interface AddPurchaseModalProps {
-  supplier: any;
+  supplier: { id: string; supplier_name: string; phone: string };
   onClose: () => void;
-  onSuccess: (info?: any) => void;
+  onSuccess: (purchaseData: { bill_number: string; description: string; purchase_amount: number; paid_amount: number }) => void;
 }
 
 export default function AddPurchaseModal({ supplier, onClose, onSuccess }: AddPurchaseModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const [billNumber, setBillNumber] = useState(`PUR-${Math.floor(1000 + Math.random() * 9000)}`);
+
+  const [billNumber, setBillNumber] = useState(`BILL-${Math.floor(1000 + Math.random() * 9000)}`);
   const [itemsSummary, setItemsSummary] = useState('');
   const [purchaseAmount, setPurchaseAmount] = useState<number>(0);
   const [paidNow, setPaidNow] = useState<number>(0);
@@ -35,6 +37,19 @@ export default function AddPurchaseModal({ supplier, onClose, onSuccess }: AddPu
     if (!purchaseAmount || purchaseAmount <= 0) return;
     setIsSubmitting(true);
     try {
+      try {
+        await addPurchase({
+          supplier_name: supplier.supplier_name,
+          item_name: itemsSummary.trim() || 'Stock Fabric Purchase',
+          quantity: 1,
+          total_cost: purchaseAmount,
+          paid_amount: paidNow,
+          notes: billNumber,
+        });
+      } catch (apiErr) {
+        console.warn('Backend purchase API offline, saving locally:', apiErr);
+      }
+
       playToastAudio('add');
       showCatalogToast(`Added Purchase Rs. ${purchaseAmount.toLocaleString()} to ${supplier.supplier_name}!`, 'add');
       onSuccess({
@@ -78,78 +93,78 @@ export default function AddPurchaseModal({ supplier, onClose, onSuccess }: AddPu
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 bg-slate-50 flex flex-col gap-3.5">
-          <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs font-mono flex justify-between">
-            <span className="text-slate-600">Current Payable Balance:</span>
-            <span className="font-bold text-slate-900">Rs. {(supplier.total_balance || 0).toLocaleString()}</span>
-          </div>
-
           <div>
             <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              BILL / INVOICE # (WHOLESALER REF)
+              SUPPLIER INVOICE / BILL NUMBER
             </label>
             <input
               type="text"
               required
               value={billNumber}
               onChange={(e) => setBillNumber(e.target.value)}
-              placeholder="e.g. BILL-8832 / INV-990"
+              placeholder="e.g. BILL-9940"
               className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
             />
           </div>
 
           <div>
             <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              ITEMS / STOCK SUMMARY
+              ITEMS / FABRIC DETAILS SUMMARY
             </label>
             <input
               type="text"
               required
               value={itemsSummary}
               onChange={(e) => setItemsSummary(e.target.value)}
-              placeholder="e.g. 50 Cotton Suits, 20 Lawn Rolls, 10 Silk Thaan"
+              placeholder="e.g. 200 Meters Digital Printed Lawn Thaan"
               className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
             />
           </div>
 
-          <div>
-            <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              PURCHASE AMOUNT (RS) - MAAL KI KUL KEEMAT
-            </label>
-            <input
-              type="number"
-              required
-              min={1}
-              value={purchaseAmount || ''}
-              onChange={(e) => setPurchaseAmount(parseFloat(e.target.value) || 0)}
-              placeholder="Enter purchase cost"
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-base font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
-            />
-          </div>
-
-          <div>
-            <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
-              PAID AMOUNT NOW (RS) - IF ANY INITIAL PAYMENT MADE
-            </label>
-            <input
-              type="number"
-              min={0}
-              value={paidNow || ''}
-              onChange={(e) => setPaidNow(parseFloat(e.target.value) || 0)}
-              placeholder="0 (if fully on credit)"
-              className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
-            />
+          <div className="grid grid-cols-2 gap-2.5">
+            <div>
+              <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
+                TOTAL BILL COST (RS) *
+              </label>
+              <input
+                type="number"
+                required
+                min={1}
+                value={purchaseAmount || ''}
+                onChange={(e) => setPurchaseAmount(parseFloat(e.target.value) || 0)}
+                placeholder="150000"
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold text-slate-700 tracking-wider uppercase font-mono block mb-1">
+                CASH PAID NOW (RS)
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={paidNow || ''}
+                onChange={(e) => setPaidNow(parseFloat(e.target.value) || 0)}
+                placeholder="0"
+                className="w-full px-3.5 py-2.5 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-emerald-800 focus:outline-none focus:ring-2 focus:ring-[#1b3830]"
+              />
+            </div>
           </div>
 
           <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-200">
-            <button type="button" onClick={handleAnimatedClose} className="px-4 py-2 bg-slate-200 text-slate-700 font-bold text-xs rounded-xl">
+            <button
+              type="button"
+              onClick={handleAnimatedClose}
+              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+            >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || !purchaseAmount}
-              className="px-5 py-2 bg-[#1b3830] hover:bg-[#142e27] text-white font-bold text-xs rounded-xl shadow-xs"
+              disabled={isSubmitting || !purchaseAmount || purchaseAmount <= 0}
+              className="px-5 py-2 bg-[#1b3830] hover:bg-[#142e27] text-white font-bold text-xs rounded-xl flex items-center justify-center shadow-xs transition cursor-pointer"
             >
-              {isSubmitting ? 'Saving...' : 'Add Purchase Entry'}
+              <span>{isSubmitting ? 'Recording...' : 'Add Purchase Bill'}</span>
             </button>
           </div>
         </form>

@@ -14,9 +14,12 @@ import {
 } from 'lucide-react';
 import { showCatalogToast } from '@/lib/toast';
 import { showProfessionalAlert } from '@/lib/alert';
+import { fetchPurchases } from '@/lib/api';
+import { exportToCSV } from '@/lib/utils';
 import AddSupplierModal from '@/components/purchases/AddSupplierModal';
 import PaySupplierModal from '@/components/purchases/PaySupplierModal';
 import AddPurchaseModal from '@/components/purchases/AddPurchaseModal';
+import DeleteConfirmationModal from '@/components/common/DeleteConfirmationModal';
 
 interface PurchaseLedgerItem {
   id: string;
@@ -43,67 +46,6 @@ interface SupplierRecord {
   ledger: PurchaseLedgerItem[];
   updated_at?: string;
 }
-
-// Initial sample supplier records for fresh load
-const INITIAL_SUPPLIERS: SupplierRecord[] = [
-  {
-    id: 'sup-1',
-    supplier_name: 'Gul Ahmed Silk Mills',
-    phone: '0321-4567890',
-    since: 'Jan 2024',
-    total_purchases: 4,
-    total_balance: 85000,
-    time_ago: '2 days ago',
-    initials: 'GA',
-    avatar_color: 'bg-[#1b3830]',
-    ledger: [
-      {
-        id: 'leg-p1',
-        date: '24 Sep 2026',
-        bill_number: 'BILL-8832',
-        description: '50 Cotton Latha Suits, 20 Banarsi Rolls',
-        type: 'Purchase',
-        purchase_amount: 120000,
-        paid_amount: 35000,
-        balanceText: 'Rs. 85,000 PAYABLE',
-        is_due: true,
-      },
-      {
-        id: 'leg-p2',
-        date: '10 Aug 2026',
-        bill_number: 'BILL-7410',
-        description: '30 Wash & Wear Suits',
-        type: 'Purchase',
-        purchase_amount: 45000,
-        paid_amount: 45000,
-        is_due: false,
-      },
-    ],
-  },
-  {
-    id: 'sup-2',
-    supplier_name: 'Nishat Linen Vendors',
-    phone: '0300-9876543',
-    since: 'Mar 2024',
-    total_purchases: 2,
-    total_balance: 0,
-    time_ago: '1 week ago',
-    initials: 'NL',
-    avatar_color: 'bg-slate-700',
-    ledger: [
-      {
-        id: 'leg-p3',
-        date: '15 Sep 2026',
-        bill_number: 'INV-3301',
-        description: '25 Lawn Printed Unstitched Sets',
-        type: 'Purchase',
-        purchase_amount: 60000,
-        paid_amount: 60000,
-        is_due: false,
-      },
-    ],
-  },
-];
 
 // Helper to deduplicate suppliers by ID or Name+Phone
 function deduplicateSuppliers(suppliers: SupplierRecord[]): SupplierRecord[] {
@@ -141,34 +83,73 @@ export default function PurchasesPage() {
   const [showAddSupplierModal, setShowAddSupplierModal] = useState<boolean>(false);
   const [showPaySupplierModal, setShowPaySupplierModal] = useState<boolean>(false);
   const [showAddPurchaseModal, setShowAddPurchaseModal] = useState<boolean>(false);
+  const [deleteSupplierTarget, setDeleteSupplierTarget] = useState<SupplierRecord | null>(null);
 
-  // Mount effect to prevent Next.js SSR Hydration errors
-  useEffect(() => {
-    setIsMounted(true);
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('pos_supplier_records_v1');
-      if (stored !== null) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const clean = deduplicateSuppliers(parsed);
-            setSupplierRecords(clean);
-            if (clean.length > 0 && clean[0] && clean[0].id) setSelectedId(clean[0].id);
-            return;
+  const initData = React.useCallback(async () => {
+    let suppList: SupplierRecord[] = [];
+    try {
+      const apiPur = await fetchPurchases();
+      if (Array.isArray(apiPur) && apiPur.length > 0) {
+        const map = new Map<string, SupplierRecord>();
+        apiPur.forEach((p: any) => {
+          const sName = p.supplier_name || 'Wholesaler';
+          const k = sName.toLowerCase().trim();
+          const cost = Number(p.total_cost || 0);
+          const paid = Number(p.paid_amount || 0);
+          const rem = Number(p.remaining || cost - paid);
+
+          const legItem: PurchaseLedgerItem = {
+            id: `leg-${p.id}`,
+            date: new Date(p.created_at || Date.now()).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+            bill_number: `BILL-${p.id?.slice(0, 6) || 'INTAKE'}`,
+            description: p.item_name || 'Fabric Stock Intake',
+            type: 'Purchase',
+            purchase_amount: cost,
+            paid_amount: paid,
+            balanceText: rem > 0 ? `Rs. ${rem.toLocaleString()} PAYABLE` : 'SETTLED',
+            is_due: rem > 0,
+          };
+
+          if (!map.has(k)) {
+            map.set(k, {
+              id: p.id || `sup-api-${Date.now()}`,
+              supplier_name: sName,
+              phone: '0300-0000000',
+              since: 'Active',
+              total_purchases: 1,
+              total_balance: rem,
+              time_ago: 'Recent',
+              initials: sName.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase(),
+              avatar_color: 'bg-[#1b3830]',
+              ledger: [legItem],
+            });
+          } else {
+            const existing = map.get(k)!;
+            existing.total_purchases = (existing.total_purchases || 1) + 1;
+            existing.total_balance = (existing.total_balance || 0) + rem;
+            existing.ledger.unshift(legItem);
           }
-        } catch {}
+        });
+        suppList = Array.from(map.values());
       }
-      setSupplierRecords(INITIAL_SUPPLIERS);
-      if (INITIAL_SUPPLIERS.length > 0 && INITIAL_SUPPLIERS[0]) setSelectedId(INITIAL_SUPPLIERS[0].id);
+    } catch (err) {
+      console.warn('Backend purchases API sync notice:', err);
     }
+
+    const clean = deduplicateSuppliers(suppList);
+    setSupplierRecords(clean);
+    if (clean.length > 0 && clean[0] && clean[0].id) setSelectedId(clean[0].id);
   }, []);
 
-  // Save to localStorage whenever supplierRecords changes
+  // SSR Hydration & SQL API Sync — SQL-only, no browser storage for security
   useEffect(() => {
-    if (isMounted && typeof window !== 'undefined') {
-      localStorage.setItem('pos_supplier_records_v1', JSON.stringify(supplierRecords));
-    }
-  }, [supplierRecords, isMounted]);
+    setIsMounted(true);
+    initData();
+
+    const handleLiveUpdate = () => initData();
+    window.addEventListener('pos-data-updated', handleLiveUpdate);
+    return () => window.removeEventListener('pos-data-updated', handleLiveUpdate);
+  }, [initData]);
 
   // Filter suppliers based on search query and filter tabs
   const filteredSuppliers = useMemo(() => {
@@ -213,13 +194,19 @@ export default function PurchasesPage() {
     return { totalPurchases, totalPaid, netPayable };
   }, [activeSupplier]);
 
-  // Handle Single Supplier Deletion
+  // Handle Single Supplier Deletion Modal
   const handleDeleteSupplier = () => {
     if (!activeSupplier) return;
-    if (!confirm(`Are you sure you want to delete Supplier account for ${activeSupplier.supplier_name}?`)) return;
+    setDeleteSupplierTarget(activeSupplier);
+  };
 
-    showCatalogToast(`Deleted Supplier account: ${activeSupplier.supplier_name}`, 'delete');
-    const updated = supplierRecords.filter((s) => String(s.id) !== String(activeSupplier.id));
+  const confirmDeleteSupplier = () => {
+    if (!deleteSupplierTarget) return;
+    const supToDelete = deleteSupplierTarget;
+    setDeleteSupplierTarget(null);
+
+    showCatalogToast(`Deleted Supplier account: ${supToDelete.supplier_name}`, 'delete');
+    const updated = supplierRecords.filter((s) => String(s.id) !== String(supToDelete.id));
     setSupplierRecords(updated);
     setSelectedId(updated[0]?.id || null);
   };
@@ -564,13 +551,28 @@ export default function PurchasesPage() {
                     <span>Add Purchase</span>
                   </button>
 
-                  {/* Download PDF */}
+                  {/* Download Statement */}
                   <button
-                    onClick={() => window.print()}
+                    onClick={() => {
+                      if (!activeSupplier) return;
+                      const rows = (activeSupplier.ledger || []).map((item) => [
+                        item.date,
+                        item.bill_number,
+                        item.description,
+                        item.purchase_amount || 0,
+                        item.paid_amount || 0,
+                      ]);
+                      exportToCSV(
+                        `${activeSupplier.supplier_name.replace(/\s+/g, '_')}_purchases.csv`,
+                        ['Date', 'Bill #', 'Description', 'Purchase Amount', 'Paid Amount'],
+                        rows
+                      );
+                      showCatalogToast(`Downloaded purchase statement for ${activeSupplier.supplier_name}`, 'add');
+                    }}
                     className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
                   >
                     <Download className="w-3.5 h-3.5 text-slate-600" />
-                    <span>Download PDF</span>
+                    <span>Download Statement</span>
                   </button>
 
                   {/* Delete Supplier */}
@@ -741,6 +743,17 @@ export default function PurchasesPage() {
           supplier={activeSupplier}
           onClose={() => setShowAddPurchaseModal(false)}
           onSuccess={handleAddPurchaseSuccess}
+        />
+      )}
+
+      {/* Animated Delete Confirmation Modal */}
+      {deleteSupplierTarget && (
+        <DeleteConfirmationModal
+          title="Confirm Supplier Deletion"
+          entityName={deleteSupplierTarget.supplier_name}
+          message={`Are you sure you want to delete Supplier account for ${deleteSupplierTarget.supplier_name}?`}
+          onClose={() => setDeleteSupplierTarget(null)}
+          onConfirm={confirmDeleteSupplier}
         />
       )}
     </div>

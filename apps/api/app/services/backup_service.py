@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 from sqlalchemy.future import select
 
 from app.core.database import SessionDb1, SessionDb2, SessionDb3
@@ -59,7 +60,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "created_at": str(p.created_at) if p.created_at else None,
                 "updated_at": str(p.updated_at) if p.updated_at else None
             } for p in products]
-            safe_write_backup("local_catalog_backup.json", p_list, "products")
+            await asyncio.to_thread(safe_write_backup,"local_catalog_backup.json", p_list, "products")
     except Exception as e:
         stats["products_error"] = str(e)
 
@@ -82,7 +83,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "leave_reason": e.leave_reason,
                 "created_at": str(e.created_at) if e.created_at else None,
             } for e in employees]
-            safe_write_backup("local_employees_backup.json", e_list, "employees")
+            await asyncio.to_thread(safe_write_backup,"local_employees_backup.json", e_list, "employees")
     except Exception as e:
         stats["employees_error"] = str(e)
 
@@ -104,7 +105,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "billing_date": str(b.billing_date) if b.billing_date else None,
                 "created_at": str(b.created_at) if b.created_at else None,
             } for b in invoices]
-            safe_write_backup("local_billing_backup.json", b_list, "billing_history")
+            await asyncio.to_thread(safe_write_backup,"local_billing_backup.json", b_list, "billing_history")
     except Exception as e:
         stats["billing_error"] = str(e)
 
@@ -120,7 +121,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "total_balance": k.total_balance,
                 "created_at": str(k.created_at) if k.created_at else None,
             } for k in khatas]
-            safe_write_backup("local_khata_backup.json", k_list, "customer_khata")
+            await asyncio.to_thread(safe_write_backup,"local_khata_backup.json", k_list, "customer_khata")
     except Exception as e:
         stats["khata_error"] = str(e)
 
@@ -141,7 +142,7 @@ async def backup_all_data_to_hard_drive() -> dict:
                 "purchase_date": str(p.purchase_date) if p.purchase_date else None,
                 "created_at": str(p.created_at) if p.created_at else None,
             } for p in purchases]
-            safe_write_backup("local_purchases_backup.json", pur_list, "shop_purchases")
+            await asyncio.to_thread(safe_write_backup,"local_purchases_backup.json", pur_list, "shop_purchases")
     except Exception as e:
         stats["purchases_error"] = str(e)
 

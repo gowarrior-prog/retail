@@ -53,6 +53,21 @@ export const EmployeeCreateSchema = z.object({
   attendance_status: z.string().optional().default('PRESENT'),
 });
 
+export const SupplierCreateSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Supplier name is required'),
+  phone: z.string().optional(),
+  balance: z.number().optional().default(0),
+});
+
+export const KhataCustomerCreateSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Customer name is required'),
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  balance: z.number().optional().default(0),
+});
+
 export const POSOrderItemSchema = z.object({
   product_id: z.string().optional().default(''),
   product_name: z.string().optional().default('Item'),
@@ -83,16 +98,20 @@ export const POSCheckoutSchema = z.object({
 });
 
 export const BillingRecordSchema = z.object({
-  id: z.string(),
-  invoice_number: z.string(),
-  customer_phone: z.string().nullable().optional(),
-  total_amount: z.number(),
-  discount: z.number().default(0),
-  tax: z.number().default(0),
-  payment_mode: z.string(),
-  cashier_name: z.string().nullable().optional(),
-  item_details_json: z.string(),
-  billing_date: z.string().nullable().optional(),
+  id: z.any().optional(),
+  invoice_number: z.any().optional(),
+  customer_phone: z.any().optional(),
+  customer_name: z.any().optional(),
+  total_amount: z.any().optional(),
+  grand_total: z.any().optional(),
+  discount: z.any().optional(),
+  tax: z.any().optional(),
+  payment_mode: z.any().optional(),
+  cashier_name: z.any().optional(),
+  item_details_json: z.any().optional(),
+  items: z.any().optional(),
+  billing_date: z.any().optional(),
+  created_at: z.any().optional(),
 });
 
 export const OdooSettingsSchema = z.object({
@@ -106,4 +125,7 @@ export const OdooSettingsSchema = z.object({
 
 export type ProductInput = z.infer<typeof ProductCreateSchema>;
 export type EmployeeInput = z.infer<typeof EmployeeCreateSchema>;
+export type SupplierInput = z.infer<typeof SupplierCreateSchema>;
+export type KhataCustomerInput = z.infer<typeof KhataCustomerCreateSchema>;
 export type POSCheckoutInput = z.infer<typeof POSCheckoutSchema>;
+export type BillingRecord = z.infer<typeof BillingRecordSchema>;

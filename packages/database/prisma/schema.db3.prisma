@@ -22,6 +22,9 @@ model BillingHistory {
   billingDate     DateTime @default(now()) @map("billing_date")
   createdAt       DateTime @default(now()) @map("created_at")
 
+  @@index([invoiceNumber])
+  @@index([customerPhone])
+  @@index([createdAt])
   @@map("billing_history")
 }
 
@@ -37,6 +40,8 @@ model CustomerKhata {
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @default(now()) @updatedAt @map("updated_at")
 
+  @@index([customerName])
+  @@index([phone])
   @@map("customer_khata")
 }
 
@@ -50,6 +55,7 @@ model KhataTransaction {
 
   createdAt   DateTime      @default(now()) @map("created_at")
 
+  @@index([khataId])
   @@map("khata_transactions")
 }
 
@@ -67,6 +73,8 @@ model ShopPurchase {
 
   createdAt    DateTime @default(now()) @map("created_at")
 
+  @@index([supplierName])
+  @@index([purchaseDate])
   @@map("shop_purchases")
 }
 

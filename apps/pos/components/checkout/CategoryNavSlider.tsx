@@ -41,10 +41,7 @@ export default function CategoryNavSlider({ onOpenHoldModal }: CategoryNavSlider
           />
         </div>
 
-        {/* Filters Button */}
-        <button className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl text-xs font-extrabold text-slate-700 flex items-center cursor-pointer shadow-2xs transition-all active:scale-95 shrink-0">
-          Filters
-        </button>
+       
 
         {/* Pure Text Light Mint BILL HISTORY Button (No Numbers/Icons) */}
         <button

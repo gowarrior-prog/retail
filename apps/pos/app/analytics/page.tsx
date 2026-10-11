@@ -1,222 +1,211 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { BarChart3, Receipt, Wallet, RefreshCw, X, TrendingUp, DollarSign, Download } from 'lucide-react';
-import { fetchBillingHistory, syncOdooBilling, getLocalBillingCache } from '@/lib/api';
-import { formatCurrency, cn } from '@/lib/utils';
+import React, { useState, useEffect, useMemo } from 'react';
+import { AlertTriangle, PackageX, ShoppingBag, Layers, CheckCircle2 } from 'lucide-react';
+import AnalyticsHeader from '@/components/analytics/AnalyticsHeader';
+import AnalyticsKPICards from '@/components/analytics/AnalyticsKPICards';
+import SalesProfitTrendChart from '@/components/analytics/SalesProfitTrendChart';
+import CategoryShareDonutChart from '@/components/analytics/CategoryShareDonutChart';
+import SettlementAndMarginSection from '@/components/analytics/SettlementAndMarginSection';
+import AnalyticalReportsTable from '@/components/analytics/AnalyticalReportsTable';
+import { fetchBillingHistory, fetchKhata, fetchPurchases, fetchEmployees, fetchProducts } from '@/lib/api';
 
 export default function AnalyticsPage() {
-  const [billingRecords, setBillingRecords] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [isSyncing, setIsSyncing] = useState<boolean>(false);
-  const [selectedRecord, setSelectedRecord] = useState<any | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState('This Month');
+  const [compareEnabled, setCompareEnabled] = useState(true);
+  const [activeAnalyticsTab, setActiveAnalyticsTab] = useState<'inventory' | 'salesmen' | 'customers' | 'returns'>('inventory');
 
-  const loadAnalytics = async () => {
+  // Real API Data states from database
+  const [billingRecords, setBillingRecords] = useState<any[]>([]);
+  const [khataCustomers, setKhataCustomers] = useState<any[]>([]);
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await fetchBillingHistory();
-      setBillingRecords(data || []);
-    } catch (err) {
-      console.error('Failed to load billing history:', err);
+      const [history, khata, purList, empList, prodList] = await Promise.all([
+        fetchBillingHistory().catch(() => []),
+        fetchKhata().catch(() => []),
+        fetchPurchases().catch(() => []),
+        fetchEmployees().catch(() => []),
+        fetchProducts().catch(() => []),
+      ]);
+      if (Array.isArray(history)) setBillingRecords(history);
+      if (Array.isArray(khata)) setKhataCustomers(khata);
+      if (Array.isArray(purList)) setPurchases(purList);
+      if (Array.isArray(empList)) setEmployees(empList);
+      if (Array.isArray(prodList)) setProducts(prodList);
+    } catch (e) {
+      console.error('Analytics page fetch error:', e);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleSyncOdooOrders = async () => {
-    setIsSyncing(true);
-    try {
-      await syncOdooBilling();
-      await loadAnalytics();
-    } catch (err) {
-      console.error('Failed to sync Odoo billing orders:', err);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  useEffect(() => {
-    loadAnalytics();
   }, []);
 
-  const totalRevenue = billingRecords.reduce((sum, r) => sum + (r.total_amount || 0), 0);
-  const totalOrders = billingRecords.length;
-  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+  useEffect(() => {
+    setIsMounted(true);
+    loadData();
+
+    const handleLiveUpdate = () => loadData();
+    window.addEventListener('pos-data-updated', handleLiveUpdate);
+    return () => window.removeEventListener('pos-data-updated', handleLiveUpdate);
+  }, [loadData]);
+
+  // Out of Stock Products filtering
+  const outOfStockProducts = useMemo(() => {
+    return products.filter((p: any) => {
+      const qty = p.stock ?? p.quantity ?? 0;
+      return qty <= 0;
+    });
+  }, [products]);
+
+  // Compute real dynamic financial metrics from database
+  const metrics = useMemo(() => {
+    const totalRev = billingRecords.reduce((sum, r) => sum + (Number(r.total_amount) || Number(r.grand_total) || 0), 0);
+    const invoiceCount = billingRecords.length;
+    const avgTicket = invoiceCount > 0 ? Math.round(totalRev / invoiceCount) : 0;
+
+    const totalPurchasesCost = purchases.reduce((sum, p) => sum + (Number(p.total_cost) || 0), 0);
+    const totalSalariesCost = employees.reduce((sum, e) => sum + (Number(e.base_salary) || 0), 0);
+
+    const grossProfit = Math.max(0, totalRev - (totalPurchasesCost * 0.7));
+    const netProfit = Math.max(0, totalRev - (totalPurchasesCost * 0.7) - totalSalariesCost);
+
+    const khataBalance = khataCustomers.reduce((sum, c) => sum + (Number(c.total_balance) || Number(c.balance) || 0), 0);
+    const khataActiveCount = khataCustomers.filter(c => (Number(c.total_balance) || Number(c.balance) || 0) > 0).length;
+
+    let totalSuitsSold = 0;
+    billingRecords.forEach(r => {
+      try {
+        const items = typeof r.item_details_json === 'string' ? JSON.parse(r.item_details_json) : (r.items || []);
+        items.forEach((item: any) => {
+          totalSuitsSold += Number(item.quantity) || 1;
+        });
+      } catch {}
+    });
+
+    return {
+      totalRevenue: totalRev,
+      invoiceCount: invoiceCount,
+      avgTicket,
+      grossProfit: Math.round(grossProfit),
+      netProfit: Math.round(netProfit),
+      fabricSuits: totalSuitsSold,
+      fabricMeters: totalSuitsSold * 7,
+      khataBalance: khataBalance,
+      khataActiveCount: khataActiveCount,
+      outOfStockCount: outOfStockProducts.length,
+    };
+  }, [billingRecords, khataCustomers, purchases, employees, outOfStockProducts]);
+
+  if (!isMounted) {
+    return (
+      <div className="flex items-center justify-center w-full h-full bg-[#F8FAFC] text-slate-400 font-sans text-xs min-h-[400px]">
+        Loading Analytics Portal...
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col gap-4 max-w-[1600px] mx-auto pb-8">
-      {/* Header */}
-      <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2 font-sans">
-            <BarChart3 className="w-5.5 h-5.5 text-indigo-600" />
-            Sales & Billing Analytics
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5 font-medium">
-            Monitor revenue metrics, order volumes, and invoice details
-          </p>
-        </div>
+    <div className="flex flex-col w-full min-h-full bg-[#F8FAFC] font-sans text-slate-800 antialiased p-4 lg:p-6 space-y-6">
+      {/* 1. Header & Controls */}
+      <AnalyticsHeader
+        selectedPreset={selectedPreset}
+        onSelectPreset={setSelectedPreset}
+        compareEnabled={compareEnabled}
+        onToggleCompare={setCompareEnabled}
+      />
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleSyncOdooOrders}
-            disabled={isSyncing}
-            className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer active:scale-95"
-          >
-            <Download className={cn('w-4 h-4', isSyncing && 'animate-bounce')} />
-            <span>{isSyncing ? 'Syncing Odoo...' : 'Sync Odoo Orders'}</span>
-          </button>
+      {/* 2. Top KPI Cards */}
+      <AnalyticsKPICards
+        totalRevenue={metrics.totalRevenue}
+        invoiceCount={metrics.invoiceCount}
+        avgTicket={metrics.avgTicket}
+        netProfit={metrics.netProfit}
+        grossProfit={metrics.grossProfit}
+        fabricSuits={metrics.fabricSuits}
+        fabricMeters={metrics.fabricMeters}
+        khataBalance={metrics.khataBalance}
+        khataActiveCount={metrics.khataActiveCount}
+      />
 
-          <button
-            onClick={loadAnalytics}
-            disabled={isLoading}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200/80 rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 disabled:opacity-50 cursor-pointer active:scale-95"
-          >
-            <RefreshCw className={cn('w-4 h-4 text-slate-600', isLoading && 'animate-spin')} />
-            <span>Refresh</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center shrink-0">
-            <DollarSign className="w-5.5 h-5.5" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Revenue</span>
-            <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">{formatCurrency(totalRevenue)}</span>
+      {/* 3. Out of Stock Inventory Alert Section (Real-Time DB Alert) */}
+      <div className="bg-white rounded-2xl border border-red-200/80 shadow-xs p-5 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-red-100 rounded-xl text-red-600">
+              <PackageX className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                Out of Stock Inventory Section
+                <span className="px-2 py-0.5 text-[10px] font-mono font-bold bg-red-100 text-red-700 rounded-full border border-red-300/60">
+                  {outOfStockProducts.length} Items Khatam
+                </span>
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Products with 0 or negative stock quantity requiring restock intake.
+              </p>
+            </div>
           </div>
         </div>
 
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-            <Receipt className="w-5.5 h-5.5" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Orders Completed</span>
-            <span className="text-2xl font-bold text-emerald-600 font-mono tracking-tight">{totalOrders}</span>
-          </div>
-        </div>
-
-        <div className="bg-white p-4.5 rounded-2xl border border-slate-200/80 shadow-xs flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center shrink-0">
-            <TrendingUp className="w-5.5 h-5.5" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Average Order Value (AOV)</span>
-            <span className="text-2xl font-bold text-slate-900 font-mono tracking-tight">{formatCurrency(avgOrderValue)}</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Invoices Table */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col">
-        <div className="p-3.5 bg-slate-50 border-b border-slate-200/80 flex items-center justify-between">
-          <span className="font-bold text-slate-900 text-xs flex items-center gap-2">
-            <Receipt className="w-4 h-4 text-indigo-600" />
-            Billing History Invoices
-          </span>
-          <span className="font-mono text-xs font-bold text-slate-500">{billingRecords.length} Invoices</span>
-        </div>
-
-        {isLoading ? (
-          <div className="py-12 text-center text-slate-500 text-sm font-medium">Fetching billing records...</div>
-        ) : billingRecords.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-sm font-medium">
-            No checkout transactions recorded yet. Complete a sale in POS to view invoice history.
+        {outOfStockProducts.length === 0 ? (
+          <div className="p-4 text-center bg-emerald-50/60 rounded-xl border border-emerald-200/60 flex items-center justify-center gap-2 text-xs font-bold text-emerald-800">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+            Sub In-Stock! Catalog mein koi product out of stock nahi hai.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase font-mono">
-                <tr>
-                  <th className="p-3">Invoice Number</th>
-                  <th className="p-3">Client / Phone</th>
-                  <th className="p-3">Payment Mode</th>
-                  <th className="p-3">Cashier</th>
-                  <th className="p-3 text-right">Total Amount</th>
-                  <th className="p-3 text-right">Timestamp</th>
-                  <th className="p-3 text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700 font-mono">
-                {billingRecords.map((r, idx) => (
-                  <tr key={r.id || `inv-${idx}`} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="p-3 font-bold text-slate-900">{r.invoice_number}</td>
-                    <td className="p-3 font-sans font-medium">{r.customer_phone || 'Walk-in Client'}</td>
-                    <td className="p-3">
-                      <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold text-[10px]">
-                        {r.payment_mode}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {outOfStockProducts.map((p: any, idx: number) => {
+              const qty = p.stock ?? p.quantity ?? 0;
+              return (
+                <div
+                  key={p.id || idx}
+                  className="p-3 bg-red-50/50 rounded-xl border border-red-200/70 flex flex-col justify-between space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <span className="text-[9px] font-mono font-bold uppercase text-red-500">
+                        {p.category || 'General'}
                       </span>
-                    </td>
-                    <td className="p-3 font-sans">{r.cashier_name || 'Cashier'}</td>
-                    <td className="p-3 text-right font-bold text-slate-900">{formatCurrency(r.total_amount || 0)}</td>
-                    <td className="p-3 text-right text-slate-500 text-[11px]">
-                      {r.created_at ? new Date(r.created_at).toLocaleString() : 'Recent'}
-                    </td>
-                    <td className="p-3 text-center">
-                      <button
-                        onClick={() => setSelectedRecord(r)}
-                        className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer active:scale-95"
-                      >
-                        Inspect
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      <h4 className="text-xs font-bold text-slate-900 line-clamp-1">
+                        {p.name}
+                      </h4>
+                    </div>
+                    <span className="bg-red-600 text-white text-[9px] font-mono font-black px-1.5 py-0.5 rounded">
+                      OUT OF STOCK
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-mono text-slate-600 pt-1 border-t border-red-100">
+                    <span>Stock: <strong className="text-red-700 font-bold">{qty}</strong></span>
+                    <span>Rs. {Number(p.price || 0).toLocaleString()}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
-      {/* Inspect Invoice Modal */}
-      {selectedRecord && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-5 shadow-2xl border border-slate-200 max-w-lg w-full flex flex-col gap-3.5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm font-mono">
-                Invoice Details: {selectedRecord.invoice_number}
-              </h3>
-              <button onClick={() => setSelectedRecord(null)} className="text-slate-400 hover:text-slate-600">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {/* 4. Trend Chart & Category Donut Chart */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <SalesProfitTrendChart />
+        <CategoryShareDonutChart />
+      </div>
 
-            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs font-mono flex flex-col gap-2 text-slate-700">
-              <div className="flex justify-between">
-                <span>Client / Phone:</span>
-                <span className="font-bold text-slate-900">{selectedRecord.customer_phone || 'Walk-in Client'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Payment Mode:</span>
-                <span className="font-bold text-indigo-600">{selectedRecord.payment_mode}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Total Amount:</span>
-                <span className="font-bold text-slate-900 text-sm">{formatCurrency(selectedRecord.total_amount || 0)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Discount Total:</span>
-                <span>{formatCurrency(selectedRecord.discount || 0)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>Sales Tax:</span>
-                <span>{formatCurrency(selectedRecord.tax || 0)}</span>
-              </div>
-            </div>
+      {/* 5. Settlement Breakdown & Fabric Margin Intelligence */}
+      <SettlementAndMarginSection />
 
-            <button
-              onClick={() => setSelectedRecord(null)}
-              className="w-full py-2.5 bg-indigo-600 text-white font-bold text-xs rounded-xl hover:bg-indigo-700 transition-all cursor-pointer active:scale-95"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {/* 6. Analytical Reports Tabbed Table */}
+      <AnalyticalReportsTable
+        activeTab={activeAnalyticsTab}
+        onTabChange={setActiveAnalyticsTab}
+      />
     </div>
   );
 }
