@@ -102,6 +102,38 @@ async def sync_all_odoo_products(limit: int = None) -> dict:
 
             await db.commit()
 
+        # Save all products directly to local SQLite (pos_local.db) for instant 0ms POS access
+        try:
+            from app.services.sqlite_sync_service import save_products_bulk_locally
+            from app.routers.catalog import invalidate_product_cache
+            local_prods = []
+            for p in prods:
+                o_id = p.get("id")
+                n = str(p.get("name") or "Fabric Item").strip()
+                pr = float(p.get("list_price") or 0.0)
+                cp = float(p.get("standard_price") or 0.0)
+                sk = str(p.get("default_code") or "").strip() or f"SKU-OD-{o_id}"
+                raw_b = p.get("barcode")
+                bc = str(raw_b).strip() if raw_b and str(raw_b).strip() != "False" else None
+                cat = p.get("categ_id")
+                c_name = cat[1] if isinstance(cat, (list, tuple)) and len(cat) > 1 else "General"
+                stk = int(float(p.get("qty_available") or 0.0))
+                local_prods.append({
+                    "id": f"odoo-{o_id}",
+                    "odoo_id": o_id,
+                    "name": n,
+                    "price": pr,
+                    "cost_price": cp,
+                    "sku": sk,
+                    "barcode": bc,
+                    "category": c_name,
+                    "stock": stk
+                })
+            save_products_bulk_locally(local_prods)
+            invalidate_product_cache()
+        except Exception as sq_err:
+            print(f"Notice: Local SQLite Odoo save notice: {sq_err}")
+
         return {
             "status": "success",
             "message": f"Successfully synced {len(prods)} products from Odoo ERP!",

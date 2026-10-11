@@ -4,6 +4,10 @@ export async function syncOdoo(): Promise<any> {
   return await apiFetch<any>('/sync-odoo', { method: 'POST' });
 }
 
+export async function wipeAndSyncOdoo(wipeOldData: boolean = true): Promise<any> {
+  return await apiFetch<any>(`/admin/wipe-and-sync-odoo?wipe_old_data=${wipeOldData}`, { method: 'POST' });
+}
+
 export async function syncOdooEmployees(): Promise<any> {
   return await apiFetch<any>('/sync-odoo/employees', { method: 'POST' });
 }

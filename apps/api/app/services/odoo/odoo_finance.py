@@ -47,7 +47,29 @@ async def sync_odoo_employees() -> dict:
                     db2.add(new_emp)
                     existing_emps[db_phone] = new_emp
                 synced_count += 1
+
+                # Save employee to local SQLite
+                try:
+                    from app.services.sqlite_sync_service import save_employee_locally
+                    save_employee_locally(
+                        emp_id=str(emp.get("id")),
+                        odoo_id=emp.get("id"),
+                        name=name,
+                        job_title=job,
+                        department="Sales",
+                        phone=phone,
+                        email=None
+                    )
+                except Exception:
+                    pass
+
             await db2.commit()
+
+        try:
+            from app.routers.employees import invalidate_employee_cache
+            invalidate_employee_cache()
+        except Exception:
+            pass
 
         return {"status": "success", "message": f"Synced {synced_count} employees from Odoo!", "synced": synced_count}
     except Exception as e:
@@ -89,7 +111,28 @@ async def sync_odoo_khata() -> dict:
                     db3.add(new_khata)
                     existing_khatas[db_phone] = new_khata
                 synced_count += 1
+
+                # Save khata customer to local SQLite
+                try:
+                    from app.services.sqlite_sync_service import save_khata_locally
+                    save_khata_locally(
+                        cust_id=str(p.get("id")),
+                        odoo_id=p.get("id"),
+                        name=name,
+                        phone=phone,
+                        email=None,
+                        balance=balance
+                    )
+                except Exception:
+                    pass
+
             await db3.commit()
+
+        try:
+            from app.routers.billing import invalidate_khata_cache
+            invalidate_khata_cache()
+        except Exception:
+            pass
 
         return {"status": "success", "message": f"Synced {synced_count} Khata customer records from Odoo!", "synced": synced_count}
     except Exception as e:
@@ -119,6 +162,7 @@ async def sync_odoo_purchases() -> dict:
                 total_cost = float(po.get("amount_total") or 0.0)
                 paid = total_cost if po.get("state") == "purchase" else 0.0
 
+                pur_id = f"odoo-po-{po.get('id')}"
                 new_purchase = ShopPurchaseModel(
                     id=str(uuid.uuid4()), supplier_name=supplier_name, item_name=item_name,
                     quantity=1, total_cost=total_cost, paid_amount=paid, remaining=max(0.0, total_cost - paid),
@@ -126,7 +170,30 @@ async def sync_odoo_purchases() -> dict:
                 )
                 db3.add(new_purchase)
                 synced_count += 1
+
+                # Save purchase to local SQLite
+                try:
+                    from app.services.sqlite_sync_service import save_purchase_locally
+                    save_purchase_locally(
+                        pur_id=pur_id,
+                        supplier_name=supplier_name,
+                        item_name=item_name,
+                        quantity=1,
+                        total_cost=total_cost,
+                        paid_amount=paid,
+                        remaining=max(0.0, total_cost - paid),
+                        notes=f"Synced from Odoo PO #{po.get('id')}"
+                    )
+                except Exception:
+                    pass
+
             await db3.commit()
+
+        try:
+            from app.routers.billing import invalidate_purchase_cache
+            invalidate_purchase_cache()
+        except Exception:
+            pass
 
         return {"status": "success", "message": f"Synced {synced_count} Purchase orders from Odoo!", "synced": synced_count}
     except Exception as e:
@@ -180,6 +247,12 @@ async def sync_odoo_orders() -> dict:
                 synced_count += 1
 
             await db3.commit()
+
+        try:
+            from app.routers.billing import invalidate_billing_cache
+            invalidate_billing_cache()
+        except Exception:
+            pass
 
         return {"status": "success", "message": f"Synced {synced_count} Sales History records from Odoo!", "synced": synced_count}
     except Exception as e:

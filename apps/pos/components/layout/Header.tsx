@@ -40,6 +40,27 @@ export default function Header() {
     }
   };
 
+  const [isOdooSyncing, setIsOdooSyncing] = useState(false);
+
+  const handleOdooSync = async () => {
+    if (isOdooSyncing) return;
+    const confirmed = window.confirm("Kia aap Odoo ERP se saara fresh data import karna chahte hain? Pehla local data wipe ho kar Odoo ka live data POS mein load ho jayega.");
+    if (!confirmed) return;
+
+    setIsOdooSyncing(true);
+    try {
+      const { wipeAndSyncOdoo } = await import('@/lib/api');
+      const res = await wipeAndSyncOdoo(true);
+      await loadProducts();
+      window.dispatchEvent(new Event('pos-data-updated'));
+      alert(res.message || "✓ Odoo ERP se saara data successfully import ho gaya!");
+    } catch (err: any) {
+      alert(`Odoo Sync Notice: ${err.message || 'Odoo server se connect nahi ho saka. Make sure Odoo is running at 192.168.100.2:8069'}`);
+    } finally {
+      setIsOdooSyncing(false);
+    }
+  };
+
   const currentCashier = cashierName || 'Zahid Khan';
 
   return (
@@ -75,6 +96,17 @@ export default function Header() {
         </div>
         {/* Header Actions & Cashier Profile */}
         <div className="flex items-center gap-3">
+          {/* 1-Click Odoo All-in-One Live Sync Button */}
+          <button
+            onClick={handleOdooSync}
+            disabled={isOdooSyncing}
+            className="flex items-center gap-1.5 bg-[#1b3830] hover:bg-[#142e27] active:scale-[0.98] text-white transition-all rounded-lg px-3 py-1.5 cursor-pointer text-xs font-bold shadow-xs disabled:opacity-50"
+            title="Odoo ERP ka saara data POS mein layein"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 text-emerald-400 ${isOdooSyncing ? 'animate-spin' : ''}`} />
+            <span>{isOdooSyncing ? 'Odoo Syncing...' : 'Sync Odoo Data'}</span>
+          </button>
+
           {/* Cashier User Pill Button */}
           <button
             onClick={() => setShowCashierModal(true)}

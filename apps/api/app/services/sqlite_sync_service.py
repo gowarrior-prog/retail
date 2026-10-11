@@ -502,3 +502,17 @@ def get_all_local_supplier_returns() -> list:
     conn.close()
     return rows
 
+
+def clear_all_local_pos_data():
+    """Wipes all local SQLite tables (products, bills, khata, purchases, returns) before importing full fresh Odoo database."""
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_products")
+    cursor.execute("DELETE FROM local_bills")
+    cursor.execute("DELETE FROM local_khata")
+    cursor.execute("DELETE FROM local_purchases")
+    cursor.execute("DELETE FROM local_customer_returns")
+    cursor.execute("DELETE FROM local_supplier_returns")
+    conn.commit()
+    conn.close()
+
