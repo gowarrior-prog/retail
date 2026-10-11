@@ -67,7 +67,7 @@ export default function CategoryShareDonutChart({
     const strokeDasharray = `${percent * circumference} ${circumference}`;
     const strokeDashoffset = -accumulatedPercent * circumference;
     accumulatedPercent += percent;
-    const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length];
+    const color = CATEGORY_COLORS[idx % CATEGORY_COLORS.length] || { stroke: '#047857', bg: 'bg-emerald-700' };
     return { ...cat, percent, strokeDasharray, strokeDashoffset, color };
   });
 

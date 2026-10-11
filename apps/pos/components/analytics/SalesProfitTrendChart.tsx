@@ -18,14 +18,14 @@ export default function SalesProfitTrendChart({ billingRecords = [] }: SalesProf
     for (let i = 6; i >= 0; i--) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const key = d.toISOString().split('T')[0];
+      const key = d.toISOString().split('T')[0] || '';
       const label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric' });
       dayMap.set(key, { label, sales: 0, profit: 0, count: 0 });
     }
 
     billingRecords.forEach((r) => {
       const rawDate = r.billing_date || r.created_at || r.timestamp;
-      const key = rawDate ? new Date(rawDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      const key = (rawDate ? new Date(rawDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]) || '';
       const amount = Number(r.total_amount || r.grand_total || 0);
       const profit = Math.round(amount * 0.35); // 35% fabric gross retail margin
 
