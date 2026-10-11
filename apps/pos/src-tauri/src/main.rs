@@ -6,63 +6,67 @@ use std::path::Path;
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-fn main() {
+fn ensure_backend_running() {
     #[cfg(target_os = "windows")]
     {
-        // CREATE_NO_WINDOW = 0x08000000 — Runs process completely hidden in background
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        use std::net::{TcpStream, SocketAddr};
+        use std::time::Duration;
+        use std::thread::sleep;
 
-        let exe_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|parent| parent.to_path_buf()));
-
-        let mut launched = false;
-
-        if let Some(ref base) = exe_dir {
-            let candidates = [
-                base.join("Start_Shop_Server.bat"),
-                base.join("..").join("Start_Shop_Server.bat"),
-                base.join("..").join("..").join("Start_Shop_Server.bat"),
-                base.join("..").join("..").join("..").join("Start_Shop_Server.bat"),
-                base.join("..").join("..").join("..").join("..").join("Start_Shop_Server.bat"),
-            ];
-
-            for bat in &candidates {
-                if bat.exists() {
-                    let _ = Command::new("cmd")
-                        .args(["/C", bat.to_str().unwrap()])
-                        .creation_flags(CREATE_NO_WINDOW)
-                        .spawn();
-                    launched = true;
-                    break;
-                }
+        // 1. Check if backend server is ALREADY running on 127.0.0.1:8000
+        if let Ok(addr) = "127.0.0.1:8000".parse::<SocketAddr>() {
+            if TcpStream::connect_timeout(&addr, Duration::from_millis(250)).is_ok() {
+                return; // Server is already alive and running, nothing to do!
             }
         }
 
-        if !launched {
-            let python_venv = r"d:\webapp\retail-ecosystem\apps\api\venv\Scripts\python.exe";
-            let main_py = r"d:\webapp\retail-ecosystem\apps\api\main.py";
-            let batch_path = r"d:\webapp\retail-ecosystem\Start_Shop_Server.bat";
+        // 2. CREATE_NO_WINDOW = 0x08000000 — 100% silent background process, zero CMD window
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-            if Path::new(python_venv).exists() && Path::new(main_py).exists() {
-                let _ = Command::new(python_venv)
-                    .arg(main_py)
-                    .current_dir(r"d:\webapp\retail-ecosystem\apps\api")
+        let python_candidates = [
+            (r"d:\webapp\retail-ecosystem\apps\api\venv\Scripts\python.exe", r"d:\webapp\retail-ecosystem\apps\api\main.py", r"d:\webapp\retail-ecosystem\apps\api"),
+            (r".\apps\api\venv\Scripts\python.exe", r".\apps\api\main.py", r".\apps\api"),
+            (r"..\apps\api\venv\Scripts\python.exe", r"..\apps\api\main.py", r"..\apps\api"),
+        ];
+
+        let mut spawned = false;
+        for (py_bin, script, cwd) in &python_candidates {
+            if Path::new(py_bin).exists() && Path::new(script).exists() {
+                let _ = Command::new(py_bin)
+                    .arg(script)
+                    .current_dir(cwd)
                     .creation_flags(CREATE_NO_WINDOW)
                     .spawn();
-            } else if Path::new(batch_path).exists() {
+                spawned = true;
+                break;
+            }
+        }
+
+        if !spawned {
+            let batch_path = r"d:\webapp\retail-ecosystem\Start_Shop_Server.bat";
+            if Path::new(batch_path).exists() {
                 let _ = Command::new("cmd")
                     .args(["/C", batch_path])
                     .creation_flags(CREATE_NO_WINDOW)
                     .spawn();
-            } else {
-                let _ = Command::new("python")
-                    .args(["apps/api/main.py"])
-                    .creation_flags(CREATE_NO_WINDOW)
-                    .spawn();
+                spawned = true;
             }
         }
+
+        if !spawned {
+            let _ = Command::new("python")
+                .args(["apps/api/main.py"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .spawn();
+        }
+
+        // 3. Allow background server a moment to bind port 8000 before window finishes loading
+        sleep(Duration::from_millis(600));
     }
+}
+
+fn main() {
+    ensure_backend_running();
 
     tauri::Builder::default()
         .run(tauri::generate_context!())
