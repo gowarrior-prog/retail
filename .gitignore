@@ -48,4 +48,6 @@ target/
 **/src-tauri/target/
 *.db
 apps/api/data/*.db
+*.exe
+Bilal_Cloth_POS_Installers/
 

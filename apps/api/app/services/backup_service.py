@@ -23,20 +23,11 @@ async def backup_all_data_to_hard_drive() -> dict:
 
     def safe_write_backup(filename: str, new_list: list, entity_key: str):
         filepath = os.path.join(data_dir, filename)
-        if len(new_list) > 0:
+        try:
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(new_list, f, indent=2, ensure_ascii=False)
             stats[entity_key] = len(new_list)
-        elif os.path.exists(filepath):
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    existing = json.load(f)
-                stats[entity_key] = len(existing) if isinstance(existing, list) else 0
-            except Exception:
-                stats[entity_key] = 0
-        else:
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump([], f, indent=2, ensure_ascii=False)
+        except Exception as err:
             stats[entity_key] = 0
 
     # 1. Products Catalog Backup (DB1)

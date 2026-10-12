@@ -642,7 +642,16 @@ def classify_user_intent(text: str) -> str:
 
     # 5. Khata / Ledger
     if re.search(r'\b(khata|ledger|udhar|baqi|karz|hisab|customer\s+khata)\b', lower):
+        if re.search(r'\b(add|bana|likh|darj|shamil|new|create|kar\s+do|ker\s+do)\b', lower):
+            return "add_khata"
         return "ledger"
+
+    if re.search(r'\b(customer|client|gahak)\b', lower) and re.search(r'\b(add|bana|naya|new|create|darj)\b', lower):
+        return "add_khata"
+
+    # Product creation intent
+    if re.search(r'\b(product|item|maal|fabric)\b', lower) and re.search(r'\b(add|naya|new|create|darj)\b', lower):
+        return "add_product"
 
     # 6. Explicit cloth orders (numbers + fabric, or explicit purchase command)
     order_words = {"cotton", "boski", "latha", "silk", "lawn", "karandi", "khaddar", "linen", "chiffon", "suit", "suits", "thaan", "meter", "meters", "guz", "kurti", "jora"}
@@ -736,6 +745,73 @@ def get_ledger_for_ai(search_term: str = "") -> Dict[str, Any]:
         "total_due": total_due,
         "count": len(customers)
     }
+
+
+def extract_khata_customer_info(message: str) -> Dict[str, Any]:
+    """Extracts customer name, phone, and optional initial balance from natural text."""
+    phone_match = re.search(r'\b(03\d{2}[-\s]?\d{7}|\+92\d{10})\b', message)
+    phone = phone_match.group(1).replace(" ", "").replace("-", "") if phone_match else ""
+
+    amt_match = re.search(r'\b(\d+)\s*(?:rs|rupees|hazar|udhar|baqi)?\b', message)
+    balance = 0.0
+    if amt_match and (not phone or amt_match.group(1) not in phone):
+        try:
+            val = float(amt_match.group(1))
+            if val < 5000000:
+                balance = val
+        except Exception:
+            pass
+
+    clean = re.sub(
+        r'\b(khata|ledger|main|mein|add|ker|kar|karo|do|de|ka|ki|ke|naam|customer|client|new|bana|likh|darj|shamil|udhar|rupay|rs|balance|phone|number|mob|mobile|please)\b',
+        ' ',
+        message,
+        flags=re.IGNORECASE
+    )
+    clean = re.sub(r'\d+', ' ', clean)
+    clean = re.sub(r'[^\w\s]', ' ', clean)
+    words = [w.strip() for w in clean.split() if len(w.strip()) >= 2]
+
+    raw_name = " ".join(words).title() if words else "New Customer"
+    low_name = raw_name.lower()
+    if "subhna" in low_name or "subhan" in low_name:
+        raw_name = "Subhan"
+    elif "usman" in low_name:
+        raw_name = "Usman"
+    elif "ali" in low_name:
+        raw_name = "Ali"
+    elif "tariq" in low_name:
+        raw_name = "Tariq"
+    elif "ahmed" in low_name or "ahmad" in low_name:
+        raw_name = "Ahmad"
+    elif "bilal" in low_name:
+        raw_name = "Bilal"
+    elif "hamza" in low_name:
+        raw_name = "Hamza"
+
+    return {
+        "name": raw_name,
+        "phone": phone,
+        "balance": balance
+    }
+
+
+def extract_product_info(message: str) -> Dict[str, Any]:
+    """Extracts product title, price, and category from natural language query."""
+    amt_match = re.search(r'\b(\d+)\s*(?:rs|rupees|price|rate)?\b', message)
+    price = 0.0
+    if amt_match:
+        try:
+            price = float(amt_match.group(1))
+        except Exception:
+            pass
+
+    clean = re.sub(r'\b(product|item|maal|fabric|add|naya|new|create|darj|shamil|karo|kar|do|price|rate|rs|rupay)\b', ' ', message, flags=re.IGNORECASE)
+    clean = re.sub(r'\d+', ' ', clean)
+    clean = re.sub(r'[^\w\s]', ' ', clean)
+    words = [w.strip() for w in clean.split() if len(w.strip()) >= 2]
+    raw_name = " ".join(words).title() if words else "Fabric Item"
+    return {"name": raw_name, "price": price or 1000.0, "category": "Fabric"}
 
 
 async def process_ai_chat_hybrid(
@@ -890,6 +966,77 @@ CRITICAL: Respond strictly in {user_lang}."""
             "execution_time_ms": round((time.time() - start_time) * 1000, 2)
         }
 
+    # 4b. ➕ ADD KHATA / LEDGER CUSTOMER INTENT
+    if intent == "add_khata":
+        info = extract_khata_customer_info(message)
+        from app.services.sqlite_sync_service import save_khata_locally
+        cust_id = f"cust-{uuid.uuid4().hex[:8]}"
+        save_khata_locally(
+            cust_id=cust_id,
+            odoo_id=0,
+            name=info["name"],
+            phone=info["phone"],
+            email="",
+            balance=info["balance"]
+        )
+        ledger_data = get_ledger_for_ai()
+        cust_name = info["name"]
+        bal_str = f"Rs {info['balance']:,.0f}" if info["balance"] > 0 else "Rs 0"
+
+        if user_lang == "english":
+            reply = f"✅ Customer successfully added to Khata Ledger: **{cust_name}** (Initial Due: {bal_str}). You can view and manage their account on the Customer Ledger page."
+        elif user_lang == "urdu":
+            reply = f"✅ گاہک کا کھاتہ کامیابی سے شامل کر دیا گیا: **{cust_name}** (بقایا ادھار: {bal_str})۔ لیجر پیج پر نیا کھاتہ فعال ہے۔"
+        else:
+            reply = f"✅ Kamyabi se Khata add ho gaya: **{cust_name}** (Baqi Udhar: {bal_str}). Customer Ledger mein naya record save ho gaya hai."
+
+        return {
+            "status": "success",
+            "engine": "offline_nlp",
+            "intent": "add_khata",
+            "reply_text": reply,
+            "language": user_lang,
+            "items": [],
+            "ledger_data": ledger_data,
+            "action_executed": f"Added customer '{cust_name}' to Khata Ledger.",
+            "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    # 4c. ➕ ADD PRODUCT TO INVENTORY INTENT
+    if intent == "add_product":
+        info = extract_product_info(message)
+        from app.services.sqlite_sync_service import save_product_locally
+        prod_id = f"prod-{uuid.uuid4().hex[:8]}"
+        sku = f"SKU-{uuid.uuid4().hex[:4].upper()}"
+        save_product_locally(
+            prod_id=prod_id,
+            odoo_id=0,
+            name=info["name"],
+            price=info["price"],
+            cost_price=info["price"] * 0.7,
+            sku=sku,
+            barcode=sku,
+            category=info["category"],
+            stock=50
+        )
+        if user_lang == "english":
+            reply = f"✅ Product added to catalog: **{info['name']}** (Price: Rs {info['price']:,.0f}, SKU: {sku}). It is now available for billing."
+        elif user_lang == "urdu":
+            reply = f"✅ پروڈکٹ کیٹلاگ میں شامل کر دی گئی: **{info['name']}** (قیمت: Rs {info['price']:,.0f}, SKU: {sku})۔"
+        else:
+            reply = f"✅ Naya product catalog mein add ho gaya: **{info['name']}** (Qeemat: Rs {info['price']:,.0f}, SKU: {sku}). Ab aap iska bill bana sakte hain."
+
+        return {
+            "status": "success",
+            "engine": "offline_nlp",
+            "intent": "add_product",
+            "reply_text": reply,
+            "language": user_lang,
+            "items": [],
+            "action_executed": f"Added product '{info['name']}' to catalog.",
+            "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
     # 5. 🖨️ PRINT BILL INTENT
     if intent == "print":
         recent_bill = get_recent_bill_for_ai()
@@ -947,37 +1094,54 @@ CRITICAL: Respond strictly in {user_lang}."""
             "execution_time_ms": round((time.time() - start_time) * 1000, 2)
         }
 
-    # 7. 💬 CONVERSATIONAL CHAT INTENT (GREETINGS, CHITCHAT, GENERAL ASSISTANCE)
+    # 7. 💬 CONVERSATIONAL CHAT & GENERAL INTELLIGENCE INTENT (SCIENCE, FACTS, GENERAL KNOWLEDGE, MEMORY)
     chat_reply = ""
     if gemini_key:
         try:
-            chat_prompt = f"""You are the friendly, intelligent AI Shop Manager for 'Bilal Cloth & Silk Center' (a high-end fabric retail store in Pakistan).
-The cashier or customer sent this message: "{message}"
-Language rule: The user's language is {user_lang}. Respond STRICTLY in {user_lang}.
-Behavior guidelines:
-- If greeted (e.g. 'hi', 'salam', 'kya haal hai', 'hello'): Greet warmly, introduce yourself as the Bilal Cloth AI Manager, and briefly say how you can help (billing fabric orders, checking sales analytics, giving market fashion trends, customer khata ledger, and printing receipts).
-- DO NOT invent or display any product cards or prices unless specifically asked to buy or order.
-- Keep the response warm, natural, and concise (2 to 3 sentences maximum)."""
+            # Build multi-turn conversational memory
+            contents = []
+            if history and isinstance(history, list):
+                for turn in history[-8:]:
+                    sender = turn.get("sender", "user")
+                    turn_role = "user" if sender == "user" else "model"
+                    t = turn.get("text", "")
+                    if t and isinstance(t, str) and t.strip():
+                        contents.append({"role": turn_role, "parts": [{"text": t.strip()}]})
+
+            user_instruction = f"""[System context: You are the AI Manager for 'Bilal Cloth & Silk Center' (Narowal, Pakistan).
+Capabilities & Persona:
+1. STORE COPILOT: You help with POS billing, fabric catalog (Cotton Latha, Pure Boski, Egyptian Cotton, Wash & Wear, Lawn, Silk), customer khata ledger, and sales analytics.
+2. COMPREHENSIVE INTELLIGENCE & GOOGLE KNOWLEDGE: You can answer ANY question the user asks about science, technology, physics, chemistry, textile technology, fabric care, stain removal, business advice, mathematics, global facts, or current information. Never refuse general or scientific questions — answer them thoroughly, helpfully, and accurately!
+3. CRITICAL LANGUAGE RULE: The user is speaking in {user_lang}. Respond STRICTLY, FLUENTLY, and NATURALLY in {user_lang}.
+4. CONVERSATIONAL MEMORY: Remember previous context and references from earlier messages in this conversation.
+5. NO FAKE PRODUCTS: If the user is asking general questions, greeting, or discussing science/topics, DO NOT invent any product cards or fake pricing.]
+
+User message: {message}"""
+
+            contents.append({"role": "user", "parts": [{"text": user_instruction}]})
+
             gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={gemini_key}"
-            async with httpx.AsyncClient(timeout=3.5) as client:
+            async with httpx.AsyncClient(timeout=15.0) as client:
                 r = await client.post(
                     gemini_url,
-                    json={"contents": [{"parts": [{"text": chat_prompt}]}]},
+                    json={"contents": contents},
                     headers={"Content-Type": "application/json"}
                 )
                 if r.status_code == 200:
-                    chat_reply = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
-                    engine_used = "gemini_cloud"
+                    cand = r.json().get("candidates", [])
+                    if cand and "content" in cand[0] and "parts" in cand[0]["content"]:
+                        chat_reply = cand[0]["content"]["parts"][0]["text"].strip()
+                        engine_used = "gemini_cloud"
         except Exception as e:
             print(f"[AI Service] Gemini chat fallback: {e}")
 
     if not chat_reply:
         if user_lang == "english":
-            chat_reply = "Hello! I am your AI Business Manager at Bilal Cloth & Silk Center. I can assist you with natural language billing, sales analytics, market trends, khata ledgers, and receipt printing. How can I help you today?"
+            chat_reply = "Hello! I am your AI Business Manager at Bilal Cloth & Silk Center. I can assist you with natural language billing, sales analytics, market trends, khata ledgers, science, and fabric care. How can I help you today?"
         elif user_lang == "urdu":
-            chat_reply = "وعلیکم السلام! میں بلال کلاٹھ کا اے آئی مینیجر ہوں۔ میں بلنگ، روزانہ سیلز اینالیٹکس، مارکیٹ ٹرینڈز، کھاتہ لیجر اور بل پرنٹنگ میں آپ کی مدد کر سکتا ہوں۔ فرمائیے میں کیا خدمت کروں؟"
+            chat_reply = "وعلیکم السلام! میں بلال کلاٹھ کا اے آئی مینیجر ہوں۔ میں بلنگ، روزانہ سیلز اینالیٹکس، مارکیٹ ٹرینڈز، سائنسی و معلوماتی سوالات، کھاتہ لیجر اور بل پرنٹنگ میں آپ کی مدد کر سکتا ہوں۔ فرمائیے میں کیا خدمت کروں؟"
         else:
-            chat_reply = "Walaikum Assalam! Main Bilal Cloth ka AI Assistant hoon. Main aapki billing, daily sales analytics, market fabric trends, customer khata ledger, aur receipt print karne mein madad kar sakta hoon. Aaj main aapki kya madad karoon?"
+            chat_reply = "Walaikum Assalam! Main Bilal Cloth ka AI Manager hoon. Main aapki billing, daily sales analytics, market trends, science o maloomat, customer khata ledger, aur receipt printing mein madad kar sakta hoon. Aaj main aapki kya madad karoon?"
 
     return {
         "status": "success",

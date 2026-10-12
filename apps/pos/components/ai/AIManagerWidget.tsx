@@ -20,6 +20,7 @@ import {
   CheckCircle,
   AlertTriangle,
   ArrowRight,
+  Trash2,
 } from 'lucide-react';
 import { chatWithAI, fetchAIStatus, NLOrderItem, AIChatResult } from '@/lib/api/ai';
 import { useCartStore } from '@/stores/useCartStore';
@@ -60,7 +61,7 @@ export default function AIManagerWidget() {
   const { items: cartItems, addItem, addMultipleItems } = useCartStore();
   const totalCartCount = cartItems.reduce((acc, i) => acc + i.quantity, 0);
 
-  // Initial AI status & greeting
+  // Initial AI status & load persistent chat history from localStorage
   useEffect(() => {
     fetchAIStatus()
       .then((status) => {
@@ -70,16 +71,57 @@ export default function AIManagerWidget() {
         setAiEngine('gemini_cloud');
       });
 
+    try {
+      const saved = localStorage.getItem('bilal_ai_chat_history');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+          return;
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+
     setMessages([
       {
         id: 'msg-1',
         sender: 'ai',
         intent: 'chat',
-        text: 'Assalam-o-Alaikum! Main Bilal Cloth ka AI Manager hoon. Aap mujh se sales analytics, fabric market trends, billing orders, khata ledger, ya bill printing ke bare mein baat kar sakte hain.',
+        text: 'Assalam-o-Alaikum! Main Bilal Cloth ka AI Manager hoon. Aap mujh se sales analytics, fabric market trends, billing orders, khata ledger, ya koi bhi science o aam maloomat poch sakte hain.',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
   }, []);
+
+  // Persist messages to localStorage whenever they update
+  useEffect(() => {
+    if (messages.length > 0) {
+      try {
+        localStorage.setItem('bilal_ai_chat_history', JSON.stringify(messages));
+      } catch {
+        // quota fallback
+      }
+    }
+  }, [messages]);
+
+  // Clear Chat History Handler
+  const handleClearChatHistory = () => {
+    try {
+      localStorage.removeItem('bilal_ai_chat_history');
+    } catch {}
+    setMessages([
+      {
+        id: `msg-${Date.now()}`,
+        sender: 'ai',
+        intent: 'chat',
+        text: 'Chat history saaf ho gayi hai. Main aapki kya madad karoon?',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+    showCatalogToast('✓ Chat history cleared', 'scan');
+  };
 
   // Auto-scroll chat to bottom smoothly
   useEffect(() => {
@@ -148,7 +190,11 @@ export default function AIManagerWidget() {
     setIsProcessing(true);
 
     try {
-      const res = await chatWithAI(text, [], withPin);
+      const historyPayload = messages.map((m) => ({
+        sender: m.sender,
+        text: m.text || '',
+      }));
+      const res = await chatWithAI(text, historyPayload, withPin);
       if (res.engine) {
         setAiEngine(res.engine as any);
       }
@@ -169,6 +215,15 @@ export default function AIManagerWidget() {
       };
 
       setMessages((prev) => [...prev, newAiMsg]);
+
+      if (res.action_executed) {
+        showCatalogToast(`✓ ${res.action_executed}`, 'scan');
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('khata-updated'));
+          window.dispatchEvent(new CustomEvent('pos-data-updated'));
+          window.dispatchEvent(new CustomEvent('catalog-updated'));
+        }
+      }
 
       if (res.requires_pin) {
         setPinPromptMessageId(aiMsgId);
@@ -319,6 +374,15 @@ export default function AIManagerWidget() {
 
             {/* Header Right Action Icons */}
             <div className="flex items-center gap-1.5 text-zinc-400">
+              {/* Clear chat history button */}
+              <button
+                onClick={handleClearChatHistory}
+                className="p-1.5 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition cursor-pointer"
+                title="Clear AI Chat History"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+
               <button
                 className="relative p-1.5 hover:text-white hover:bg-zinc-800 rounded-lg transition cursor-pointer"
                 title={`Cart: ${totalCartCount} items`}

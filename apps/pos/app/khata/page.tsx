@@ -150,7 +150,11 @@ export default function KhataPage() {
 
     const handleLiveUpdate = () => loadApiKhata();
     window.addEventListener('pos-data-updated', handleLiveUpdate);
-    return () => window.removeEventListener('pos-data-updated', handleLiveUpdate);
+    window.addEventListener('khata-updated', handleLiveUpdate);
+    return () => {
+      window.removeEventListener('pos-data-updated', handleLiveUpdate);
+      window.removeEventListener('khata-updated', handleLiveUpdate);
+    };
   }, [loadApiKhata]);
 
   // Filter clients based on search query and filter tabs
