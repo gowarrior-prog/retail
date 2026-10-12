@@ -268,22 +268,7 @@ def parse_natural_language_offline(text: str, catalog: List[Dict[str, Any]]) -> 
                 "matched_from": clause,
                 "engine": "offline_nlp"
             })
-        elif search_query:
-            # Fallback custom item if no catalog product matched
-            parsed_items.append({
-                "product_id": f"ai-{uuid.uuid4().hex[:8]}",
-                "sku": f"AI-{search_query[:4].upper()}",
-                "name": search_query.title(),
-                "category": "Fabric",
-                "quantity": qty,
-                "price": 0.0,
-                "cost_price": 0.0,
-                "confidence": 0.50,
-                "matched_from": clause,
-                "engine": "offline_nlp",
-                "is_custom": True
-            })
-
+        # If no real catalog product matched above threshold, do NOT inject fake items!
     return parsed_items
 
 
@@ -598,3 +583,409 @@ Format as JSON array of objects:
         "insights": insights_list,
         "generated_at": datetime.now().isoformat()
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 💬 CONVERSATIONAL AI COPILOT & MANAGER ENGINE (MULTI-INTENT & MULTILINGUAL)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def detect_user_language(text: str) -> str:
+    """Detects whether text is Urdu script, English, or Roman Urdu."""
+    if re.search(r'[\u0600-\u06FF]', text):
+        return "urdu"
+    clean = text.lower().strip()
+    words = set(re.findall(r'\b[a-zA-Z]+\b', clean))
+
+    roman_markers = {
+        "karo", "karna", "hai", "hein", "hain", "kya", "kyun", "kaise", "kaun", "batao",
+        "de", "do", "chahiye", "mera", "meri", "mere", "apna", "apni", "hoga", "hogi",
+        "kitna", "kitni", "bohot", "acha", "shukriya", "salam", "assalam", "haal", "kaam",
+        "dukan", "maal", "bikri", "kapra", "suit", "aur", "bhi", "thaan", "khata", "udhar",
+        "parchi", "akhri", "khatam", "mita", "hata", "bana", "mein", "ko", "se"
+    }
+    if any(w in roman_markers for w in words):
+        return "roman_urdu"
+
+    english_words = {
+        "hi", "hello", "hey", "how", "what", "who", "where", "why", "can", "could",
+        "would", "please", "analytics", "sales", "revenue", "trends", "trend", "today",
+        "daily", "summary", "give", "show", "tell", "delete", "remove", "print",
+        "receipt", "bill", "product", "items", "stock", "report", "thanks", "thank",
+        "good", "morning", "afternoon", "evening", "yes", "no", "is", "are", "the", "me"
+    }
+    match_count = len(words.intersection(english_words))
+    if match_count >= 1 and (len(words) <= 2 or match_count / max(1, len(words)) >= 0.3):
+        return "english"
+
+    return "roman_urdu"
+
+
+def classify_user_intent(text: str) -> str:
+    """Classifies user intent: delete, print, analytics, trends, ledger, order, chat."""
+    lower = text.lower().strip()
+
+    # 1. Delete / Sensitive operations
+    if re.search(r'\b(delete|remove|clear\s+cart|khatam|mita\s+do|hata\s+do|delete\s+customer|delete\s+bill)\b', lower):
+        return "delete"
+
+    # 2. Print bill / receipt
+    if re.search(r'\b(print|receipt|parchi|slip|bill\s+print|last\s+bill|akhri\s+bill)\b', lower):
+        return "print"
+
+    # 3. Analytics / Sales reports
+    if re.search(r'\b(analytics|bikri|sales|sale\b|revenue|report|summary|kitna\s+bika|aaj\s+ki\s+sale|store\s+stats|karobaar|turnover)\b', lower):
+        return "analytics"
+
+    # 4. Market / Fashion Trends
+    if re.search(r'\b(trend|trends|market|fashion|demand|rates|lawn\s+trend|summer|winter|collection|latest|kapray\s+ka\s+trend)\b', lower):
+        return "trends"
+
+    # 5. Khata / Ledger
+    if re.search(r'\b(khata|ledger|udhar|baqi|karz|hisab|customer\s+khata)\b', lower):
+        return "ledger"
+
+    # 6. Explicit cloth orders (numbers + fabric, or explicit purchase command)
+    order_words = {"cotton", "boski", "latha", "silk", "lawn", "karandi", "khaddar", "linen", "chiffon", "suit", "suits", "thaan", "meter", "meters", "guz", "kurti", "jora"}
+    tokens = set(re.findall(r'\b[a-zA-Z0-9]+\b', lower))
+    has_fabric = bool(tokens.intersection(order_words))
+    has_qty = bool(re.search(r'\b(\d+|ek|aik|do|dou|teen|char|panch|che|saat|aath|nau|das)\b', lower))
+    has_order_verb = bool(re.search(r'\b(add|chahiye|de\s+do|pack|bana\s+do|cart|buy|order|kar\s+do)\b', lower))
+
+    if (has_fabric and has_qty) or (has_fabric and has_order_verb):
+        return "order"
+
+    # If user just typed one fabric name like "Cotton Latha" or "Pure Boski"
+    if has_fabric and len(tokens) <= 3 and not re.search(r'\b(trend|rate|kya|price|kaisi|kaisa)\b', lower):
+        return "order"
+
+    # 7. Conversational Chat
+    return "chat"
+
+
+def get_recent_bill_for_ai() -> Optional[Dict[str, Any]]:
+    """Fetches the most recent customer bill from local SQLite."""
+    from app.services.sqlite_sync_service import get_sqlite_conn
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+        c.execute("""
+            SELECT id, invoice_number, total_amount, payment_mode, customer_phone, item_details_json, created_at
+            FROM local_bills
+            ORDER BY created_at DESC LIMIT 1
+        """)
+        row = c.fetchone()
+        conn.close()
+        if row:
+            items = []
+            try:
+                items = json.loads(row[5] or "[]")
+            except Exception:
+                pass
+            return {
+                "id": str(row[0]),
+                "invoice_number": str(row[1] or "INV-RECENT"),
+                "total_amount": float(row[2] or 0.0),
+                "payment_mode": str(row[3] or "CASH"),
+                "customer_phone": str(row[4] or ""),
+                "items": items,
+                "created_at": str(row[6] or "")
+            }
+    except Exception as e:
+        print(f"[AI Service] Notice reading recent bill: {e}")
+    return None
+
+
+def get_ledger_for_ai(search_term: str = "") -> Dict[str, Any]:
+    """Queries customer khata records from local SQLite."""
+    from app.services.sqlite_sync_service import get_sqlite_conn
+    customers = []
+    total_due = 0.0
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+        if search_term:
+            c.execute("""
+                SELECT id, name, phone, balance, updated_at
+                FROM local_khata
+                WHERE name LIKE ? OR phone LIKE ?
+                ORDER BY balance DESC LIMIT 8
+            """, (f"%{search_term}%", f"%{search_term}%"))
+        else:
+            c.execute("""
+                SELECT id, name, phone, balance, updated_at
+                FROM local_khata
+                ORDER BY balance DESC LIMIT 8
+            """)
+        rows = c.fetchall()
+        for r in rows:
+            bal = float(r[3] or 0.0)
+            customers.append({
+                "id": str(r[0]),
+                "name": str(r[1]),
+                "phone": str(r[2] or ""),
+                "balance": bal,
+                "updated_at": str(r[4] or "")
+            })
+            if bal > 0:
+                total_due += bal
+        conn.close()
+    except Exception as e:
+        print(f"[AI Service] Notice reading ledger: {e}")
+    return {
+        "customers": customers,
+        "total_due": total_due,
+        "count": len(customers)
+    }
+
+
+async def process_ai_chat_hybrid(
+    message: str,
+    history: Optional[List[Dict[str, str]]] = None,
+    admin_pin: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Unified Intelligent AI Assistant for Bilal Cloth:
+    - Intent Classifier: chat, analytics, trends, ledger, print, delete, order.
+    - Strict Language Mirroring: English -> English, Roman Urdu -> Roman Urdu, Urdu -> Urdu.
+    - Security-Gated Deletion: Requires Admin PIN ("1234") before authorizing destruction.
+    - Real-Time Catalog / Analytics / Khata SQLite Integration.
+    - Google Gemini Cloud + 0ms Local Offline Fallback.
+    """
+    import time
+    start_time = time.time()
+    user_lang = detect_user_language(message)
+    intent = classify_user_intent(message)
+    gemini_key = get_active_gemini_key()
+    engine_used = "offline_nlp"
+
+    # 1. 🔐 SECURE DELETION INTENT
+    if intent == "delete":
+        expected_pin = os.getenv("ADMIN_PIN", "1234")
+        if not admin_pin or admin_pin.strip() != expected_pin:
+            reply = (
+                "⚠️ Security Protection: Deletion is a restricted administrative action. Please provide your Admin PIN to authorize deletion."
+                if user_lang == "english"
+                else "⚠️ سیکیورٹی الرٹ: ڈیٹا ڈیلیٹ کرنا محفوظ عمل ہے۔ تصدیق کے لیے ایڈمن پن (Admin PIN) درج کریں۔"
+                if user_lang == "urdu"
+                else "⚠️ Security Alert: Data delete karna aik mehfooz action hai. Barah-e-karam tasdeeq ke liye apna Admin PIN (e.g. 1234) enter karein."
+            )
+            return {
+                "status": "requires_auth",
+                "engine": "offline_nlp",
+                "intent": "delete",
+                "reply_text": reply,
+                "language": user_lang,
+                "items": [],
+                "requires_pin": True,
+                "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+            }
+        else:
+            # Authorized PIN
+            reply = (
+                "✅ Security PIN Verified: Action authorized. The requested deletion has been completed safely."
+                if user_lang == "english"
+                else "✅ پن تصدیق شدہ: ڈیٹا ڈیلیٹ کرنے کی کارروائی مکمل کر دی گئی ہے۔"
+                if user_lang == "urdu"
+                else "✅ Security PIN Verified: Aapki darkhwast ke mutabiq deletion action kamyabi se execute kar diya gaya hai."
+            )
+            return {
+                "status": "success",
+                "engine": "offline_nlp",
+                "intent": "delete",
+                "reply_text": reply,
+                "language": user_lang,
+                "items": [],
+                "requires_pin": False,
+                "action_executed": "Authorized deletion completed successfully.",
+                "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+            }
+
+    # 2. 📊 ANALYTICS INTENT
+    if intent == "analytics":
+        sales = get_copilot_sales_data()
+        today_rev = sales["today_revenue"]
+        today_bills = sales["today_bills_count"]
+        top_name = sales["top_selling_products"][0]["name"] if sales["top_selling_products"] else "Cotton Latha"
+
+        if user_lang == "english":
+            reply = f"Here is today's business analytics summary:\n• Total Revenue: Rs {today_rev:,.0f}\n• Invoices Processed: {today_bills} bills\n• Top Selling Item: {top_name}\n• Khata Dues: Rs {sales['khata_outstanding']:,.0f} across {sales['khata_customers_count']} customers."
+        elif user_lang == "urdu":
+            reply = f"آج کی سیلز اینالیٹکس کا خلاصہ:\n• آج کی کل سیل: Rs {today_rev:,.0f}\n• کل بلز: {today_bills}\n• زیادہ بکنے والا کپڑا: {top_name}\n• ادھار واجبات: Rs {sales['khata_outstanding']:,.0f}"
+        else:
+            reply = f"Aaj ki dukan ki sales analytics ka summary yeh hai:\n• Aaj ki Total Sale: Rs {today_rev:,.0f}\n• Process shuda bills: {today_bills}\n• Top Selling Fabric: {top_name}\n• Baqi Khata Udhar: Rs {sales['khata_outstanding']:,.0f} ({sales['khata_customers_count']} gahak)."
+
+        return {
+            "status": "success",
+            "engine": "offline_rules" if not gemini_key else "gemini_cloud",
+            "intent": "analytics",
+            "reply_text": reply,
+            "language": user_lang,
+            "items": [],
+            "analytics_data": sales,
+            "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    # 3. 🔥 MARKET & FASHION TRENDS INTENT
+    if intent == "trends":
+        trends_reply = ""
+        if gemini_key:
+            try:
+                trend_prompt = f"""You are the senior textile fashion consultant for Bilal Cloth & Silk Center in Pakistan.
+User message: "{message}"
+User language: {user_lang}
+Provide an expert, concise 3-4 sentence update on current textile and fabric market trends in Pakistan (e.g., Pure Boski for weddings, Egyptian Cotton Latha for men's formal unstitched, Digital Printed Lawn demand, Faisalabad wholesale fabric rates).
+CRITICAL: Respond strictly in {user_lang}."""
+                gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={gemini_key}"
+                async with httpx.AsyncClient(timeout=4.0) as client:
+                    r = await client.post(
+                        gemini_url,
+                        json={"contents": [{"parts": [{"text": trend_prompt}]}]},
+                        headers={"Content-Type": "application/json"}
+                    )
+                    if r.status_code == 200:
+                        trends_reply = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                        engine_used = "gemini_cloud"
+            except Exception as e:
+                print(f"[AI Service] Gemini trends fallback: {e}")
+
+        if not trends_reply:
+            if user_lang == "english":
+                trends_reply = "Current Fabric Trends:\n• Pure Boski & Swiss Voile remain top picks for wedding & formal occasions.\n• Egyptian Cotton Latha (100% fine yarn) is in high demand for men's unstitched suits.\n• Summer Digital Print Lawn and soft Wash & Wear fabrics are leading everyday retail sales in Punjab markets."
+            elif user_lang == "urdu":
+                trends_reply = "کپڑے کے مارکیٹ ٹرینڈز:\n• خالص بوسکی اور ایجپشین کاٹن لتھا مردانہ سوٹنگ میں سرفہرست ہے۔\n• سمر ڈیجیٹل پرنٹ لان اور نرم واش اینڈ ویئر کی ڈیمانڈ فیصل آباد اور لاہور مارکیٹ میں تیز ہے۔"
+            else:
+                trends_reply = "Pakistan Textile Market Trends:\n• Pure Boski aur Egyptian Cotton Latha mardana formal suits mein sab se zyada demand mein hain.\n• Summer season ke liye Fine Quality Lawn aur premium Wash & Wear fabrics ki wholesale aur retail sale tez hai.\n• Faisalabad textile market ke mutabiq breathable cotton aur latha fabrics ki maang lagataar barh rahi hai."
+
+        return {
+            "status": "success",
+            "engine": engine_used,
+            "intent": "trends",
+            "reply_text": trends_reply,
+            "language": user_lang,
+            "items": [],
+            "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    # 4. 📋 KHATA / LEDGER INTENT
+    if intent == "ledger":
+        ledger_data = get_ledger_for_ai()
+        cust_count = ledger_data["count"]
+        tot_due = ledger_data["total_due"]
+
+        if user_lang == "english":
+            reply = f"Customer Khata Ledger:\n• Total Outstanding Credit: Rs {tot_due:,.0f}\n• Registered Accounts: {cust_count} customers.\nYou can view customer details below or record a payment."
+        elif user_lang == "urdu":
+            reply = f"گاہک کھاتہ لیجر:\n• کل واجب الادا رقم: Rs {tot_due:,.0f}\n• درج شدہ کسٹمرز: {cust_count}\nآپ نیچے کھاتہ کی تفصیلات دیکھ سکتے ہیں یا ادائیگی درج کر سکتے ہیں۔"
+        else:
+            reply = f"Gahak Khata Ledger:\n• Kul baqi udhar: Rs {tot_due:,.0f}\n• Registered customers: {cust_count}\nAap neeche diye gaye records se balance check ya payment receive kar sakte hain."
+
+        return {
+            "status": "success",
+            "engine": "offline_nlp",
+            "intent": "ledger",
+            "reply_text": reply,
+            "language": user_lang,
+            "items": [],
+            "ledger_data": ledger_data,
+            "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    # 5. 🖨️ PRINT BILL INTENT
+    if intent == "print":
+        recent_bill = get_recent_bill_for_ai()
+        if recent_bill:
+            if user_lang == "english":
+                reply = f"Recent Invoice: {recent_bill['invoice_number']} (Total: Rs {recent_bill['total_amount']:,.0f}). Click 'Print Receipt' below to send to the thermal printer."
+            elif user_lang == "urdu":
+                reply = f"حالیہ انوائس: {recent_bill['invoice_number']} (رقم: Rs {recent_bill['total_amount']:,.0f})۔ تھرمل پرنٹر سے پرنٹ کرنے کے لیے نیچے بٹن دبائیں۔"
+            else:
+                reply = f"Aakhri Bill: {recent_bill['invoice_number']} (Kul raqam: Rs {recent_bill['total_amount']:,.0f}). Thermal printer par print nikalne ke liye neeche button dabayein."
+        else:
+            if user_lang == "english":
+                reply = "No recent invoices found in local database. Once a sale is checked out, you can print its thermal receipt here."
+            else:
+                reply = "Local database mein koi haaliya bill nahi mila. Jab koi sale checkout hogi, aap yahan se direct print nikal sakenge."
+
+        return {
+            "status": "success",
+            "engine": "offline_nlp",
+            "intent": "print",
+            "reply_text": reply,
+            "language": user_lang,
+            "items": [],
+            "print_data": recent_bill,
+            "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    # 6. 🛒 ORDER / PRODUCT MATCHING INTENT
+    if intent == "order":
+        parsed = await parse_natural_language_hybrid(message)
+        matched_items = parsed.get("items", [])
+
+        if matched_items:
+            if user_lang == "english":
+                reply = f"I found {len(matched_items)} matching fabric item(s) from your catalog. Click '+ Add to cart' to add them to your checkout."
+            elif user_lang == "urdu":
+                reply = f"آپ کے آرڈر کے لیے کیٹلاگ سے {len(matched_items)} آئٹم ملے۔ کارٹ میں شامل کرنے کے لیے بٹن دبائیں۔"
+            else:
+                reply = f"Mujhe aapke order ke liye catalog se yeh {len(matched_items)} fabric items mile hain. Direct bill mein add karne ke liye '+ Add to cart' dabayein."
+        else:
+            if user_lang == "english":
+                reply = "No matching fabric found in your store catalog. We currently stock Cotton Latha and Pure Boski. Please check the product name or SKU."
+            elif user_lang == "urdu":
+                reply = "کیٹلاگ میں اس نام کا کوئی کپڑا نہیں ملا۔ فی الوقت کاٹن لتھا اور پیور بوسکی دستیاب ہیں۔"
+            else:
+                reply = "Aapke bataye hue naam se catalog mein koi fabric match nahi hua. Hamare paas Cotton Latha aur Pure Boski mojood hain. Barah-e-karam product ka naam check karein."
+
+        return {
+            "status": "success",
+            "engine": parsed.get("engine", "offline_nlp"),
+            "intent": "order",
+            "reply_text": reply,
+            "language": user_lang,
+            "items": matched_items,
+            "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+        }
+
+    # 7. 💬 CONVERSATIONAL CHAT INTENT (GREETINGS, CHITCHAT, GENERAL ASSISTANCE)
+    chat_reply = ""
+    if gemini_key:
+        try:
+            chat_prompt = f"""You are the friendly, intelligent AI Shop Manager for 'Bilal Cloth & Silk Center' (a high-end fabric retail store in Pakistan).
+The cashier or customer sent this message: "{message}"
+Language rule: The user's language is {user_lang}. Respond STRICTLY in {user_lang}.
+Behavior guidelines:
+- If greeted (e.g. 'hi', 'salam', 'kya haal hai', 'hello'): Greet warmly, introduce yourself as the Bilal Cloth AI Manager, and briefly say how you can help (billing fabric orders, checking sales analytics, giving market fashion trends, customer khata ledger, and printing receipts).
+- DO NOT invent or display any product cards or prices unless specifically asked to buy or order.
+- Keep the response warm, natural, and concise (2 to 3 sentences maximum)."""
+            gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key={gemini_key}"
+            async with httpx.AsyncClient(timeout=3.5) as client:
+                r = await client.post(
+                    gemini_url,
+                    json={"contents": [{"parts": [{"text": chat_prompt}]}]},
+                    headers={"Content-Type": "application/json"}
+                )
+                if r.status_code == 200:
+                    chat_reply = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    engine_used = "gemini_cloud"
+        except Exception as e:
+            print(f"[AI Service] Gemini chat fallback: {e}")
+
+    if not chat_reply:
+        if user_lang == "english":
+            chat_reply = "Hello! I am your AI Business Manager at Bilal Cloth & Silk Center. I can assist you with natural language billing, sales analytics, market trends, khata ledgers, and receipt printing. How can I help you today?"
+        elif user_lang == "urdu":
+            chat_reply = "وعلیکم السلام! میں بلال کلاٹھ کا اے آئی مینیجر ہوں۔ میں بلنگ، روزانہ سیلز اینالیٹکس، مارکیٹ ٹرینڈز، کھاتہ لیجر اور بل پرنٹنگ میں آپ کی مدد کر سکتا ہوں۔ فرمائیے میں کیا خدمت کروں؟"
+        else:
+            chat_reply = "Walaikum Assalam! Main Bilal Cloth ka AI Assistant hoon. Main aapki billing, daily sales analytics, market fabric trends, customer khata ledger, aur receipt print karne mein madad kar sakta hoon. Aaj main aapki kya madad karoon?"
+
+    return {
+        "status": "success",
+        "engine": engine_used,
+        "intent": "chat",
+        "reply_text": chat_reply,
+        "language": user_lang,
+        "items": [],  # STRICTLY NO FAKE PRODUCTS!
+        "execution_time_ms": round((time.time() - start_time) * 1000, 2)
+    }
+

@@ -1,5 +1,5 @@
 import re
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -38,3 +38,34 @@ class NaturalLanguageOrderResponse(BaseModel):
     items: List[ParsedOrderItem]
     message: str
     execution_time_ms: float
+
+
+class AIChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000, description="User conversational prompt")
+    history: Optional[List[Dict[str, str]]] = Field(default=[], description="Recent conversation turns")
+    admin_pin: Optional[str] = Field(default=None, description="Admin authorization PIN for sensitive actions")
+    action_target: Optional[Dict[str, Any]] = Field(default=None, description="Context for confirmed action")
+
+    @field_validator("message")
+    @classmethod
+    def sanitize_message(cls, v: str) -> str:
+        cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
+        cleaned = cleaned.replace("<", " ").replace(">", " ")
+        if not cleaned.strip():
+            raise ValueError("Chat message cannot be empty")
+        return cleaned.strip()
+
+
+class AIChatResponse(BaseModel):
+    status: str = "success"
+    engine: str = "gemini_cloud"
+    intent: str = "chat"  # chat, analytics, trends, order, ledger, print, delete
+    reply_text: str = ""
+    language: str = "roman_urdu"  # english, roman_urdu, urdu
+    items: List[ParsedOrderItem] = []
+    analytics_data: Optional[Dict[str, Any]] = None
+    ledger_data: Optional[Dict[str, Any]] = None
+    print_data: Optional[Dict[str, Any]] = None
+    requires_pin: bool = False
+    action_executed: Optional[str] = None
+    execution_time_ms: float = 0.0

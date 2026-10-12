@@ -17,7 +17,7 @@ export interface NLOrderItem {
 
 export interface NLParseResponse {
   status: string;
-  engine: 'gemini_cloud' | 'offline_nlp' | 'offline_fallback';
+  engine: 'gemini_cloud' | 'offline_nlp';
   items: NLOrderItem[];
   message: string;
 }
@@ -55,35 +55,95 @@ export interface AIStatusResponse {
   supported_languages: string[];
 }
 
+export interface AIChatResult {
+  status: string;
+  engine: 'gemini_cloud' | 'offline_nlp' | 'offline_rules';
+  intent: 'chat' | 'analytics' | 'trends' | 'order' | 'ledger' | 'print' | 'delete';
+  reply_text: string;
+  language: 'english' | 'roman_urdu' | 'urdu';
+  items: NLOrderItem[];
+  analytics_data?: {
+    today_revenue: number;
+    today_bills_count: number;
+    total_bills_all_time: number;
+    total_revenue_all_time: number;
+    top_selling_products: Array<{ name: string; sold_qty: number }>;
+    low_stock_products: Array<{ name: string; stock: number; sku: string; category: string }>;
+    khata_outstanding: number;
+    khata_customers_count: number;
+  };
+  ledger_data?: {
+    customers: Array<{ id: string; name: string; phone: string; balance: number; updated_at: string }>;
+    total_due: number;
+    count: number;
+  };
+  print_data?: {
+    id: string;
+    invoice_number: string;
+    total_amount: number;
+    payment_mode: string;
+    customer_phone: string;
+    items: Array<any>;
+    created_at: string;
+  };
+  requires_pin?: boolean;
+  action_executed?: string | null;
+  execution_time_ms?: number;
+}
+
+/**
+ * Unified Conversational AI Assistant:
+ * Supports chat, sales analytics, market trends, ledger, receipt printing, and secure deletions.
+ */
+export async function chatWithAI(
+  message: string,
+  history: Array<{ sender: string; text: string }> = [],
+  adminPin?: string
+): Promise<AIChatResult> {
+  try {
+    return await apiFetch<AIChatResult>('/ai/chat', {
+      method: 'POST',
+      body: JSON.stringify({
+        message,
+        history,
+        admin_pin: adminPin || undefined,
+      }),
+      timeoutMs: 25000,
+    });
+  } catch (err: any) {
+    // Offline emergency fallback without generating fake products
+    const lower = message.toLowerCase();
+    const isEnglish = /\b(hi|hello|analytics|sales|trends|delete|how)\b/.test(lower);
+    
+    return {
+      status: 'offline_client_fallback',
+      engine: 'offline_nlp',
+      intent: 'chat',
+      language: isEnglish ? 'english' : 'roman_urdu',
+      reply_text: isEnglish
+        ? "I am currently in local offline mode. I can still assist with local orders, catalog searches, and receipts."
+        : "Main is waqt local offline mode mein hoon. Aap local orders aur billing ba-asani chala sakte hain.",
+      items: [], // Never generate fake products on chat!
+      requires_pin: false,
+    };
+  }
+}
+
 /**
  * Parses natural language queries into structured cart items.
- * Non-blocking with 0ms offline fallback guarantee.
- * Gemini API Key is securely managed in backend .env.
  */
 export async function parseNaturalLanguageOrder(text: string): Promise<NLParseResponse> {
   try {
     return await apiFetch<NLParseResponse>('/ai/parse-order', {
       method: 'POST',
       body: JSON.stringify({ query: text }),
-      timeoutMs: 4000,
+      timeoutMs: 25000,
     });
   } catch (err) {
-    // Zero-downtime client-side emergency fallback
     return {
       status: 'offline_client_fallback',
       engine: 'offline_nlp',
-      items: [
-        {
-          product_id: `offline-${Date.now()}`,
-          sku: 'AI-DIRECT',
-          name: text.slice(0, 30),
-          quantity: 1,
-          price: 0,
-          confidence: 0.5,
-          engine: 'offline_nlp',
-          is_custom: true,
-        },
-      ],
+      items: [], // Clean empty items list, never invent fake prices!
       message: 'Client-side fallback active.',
     };
   }
@@ -95,7 +155,7 @@ export async function parseNaturalLanguageOrder(text: string): Promise<NLParseRe
 export async function fetchCopilotInsights(): Promise<CopilotResponse> {
   return await apiFetch<CopilotResponse>('/ai/copilot-insights', {
     method: 'GET',
-    timeoutMs: 5000,
+    timeoutMs: 15000,
   });
 }
 
@@ -105,6 +165,6 @@ export async function fetchCopilotInsights(): Promise<CopilotResponse> {
 export async function fetchAIStatus(): Promise<AIStatusResponse> {
   return await apiFetch<AIStatusResponse>('/ai/status', {
     method: 'GET',
-    timeoutMs: 3000,
+    timeoutMs: 10000,
   });
 }

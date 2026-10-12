@@ -3,13 +3,20 @@ from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
-from app.schemas.ai import NaturalLanguageOrderRequest, NaturalLanguageOrderResponse, ParsedOrderItem
+from app.schemas.ai import (
+    NaturalLanguageOrderRequest,
+    NaturalLanguageOrderResponse,
+    ParsedOrderItem,
+    AIChatRequest,
+    AIChatResponse
+)
 from app.core.ai_security import check_rate_limit
 from app.services.ai_service import (
     parse_natural_language_hybrid,
     generate_copilot_insights_hybrid,
     get_copilot_sales_data,
     get_active_gemini_key,
+    process_ai_chat_hybrid,
 )
 
 router = APIRouter(prefix="/ai", tags=["AI Smart Manager"])
@@ -50,6 +57,43 @@ async def parse_order_endpoint(req: NaturalLanguageOrderRequest, request: Reques
         message=result.get("message", "Success"),
         execution_time_ms=result.get("execution_time_ms", 1.0)
     )
+
+
+@router.post("/chat", response_model=AIChatResponse)
+async def ai_chat_endpoint(req: AIChatRequest, request: Request):
+    """
+    Unified Conversational AI Manager:
+    - Multi-intent routing: chat, analytics, trends, ledger, print, delete, order.
+    - True multilingual mirroring (English, Roman Urdu, Urdu).
+    - Protected operations: requires Admin PIN ("1234") before deletion.
+    - Real-time catalog & sales data from local SQLite.
+    """
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    check_rate_limit(client_ip)
+
+    res = await process_ai_chat_hybrid(
+        message=req.message,
+        history=req.history,
+        admin_pin=req.admin_pin
+    )
+
+    items = [ParsedOrderItem(**i) for i in res.get("items", [])]
+
+    return AIChatResponse(
+        status=res.get("status", "success"),
+        engine=res.get("engine", "offline_nlp"),
+        intent=res.get("intent", "chat"),
+        reply_text=res.get("reply_text", ""),
+        language=res.get("language", "roman_urdu"),
+        items=items,
+        analytics_data=res.get("analytics_data"),
+        ledger_data=res.get("ledger_data"),
+        print_data=res.get("print_data"),
+        requires_pin=res.get("requires_pin", False),
+        action_executed=res.get("action_executed"),
+        execution_time_ms=res.get("execution_time_ms", 0.0)
+    )
+
 
 
 @router.get("/copilot-insights")
