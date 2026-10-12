@@ -4,8 +4,55 @@ export async function syncOdoo(): Promise<any> {
   return await apiFetch<any>('/sync-odoo', { method: 'POST' });
 }
 
-export async function wipeAndSyncOdoo(wipeOldData: boolean = true): Promise<any> {
-  return await apiFetch<any>(`/admin/wipe-and-sync-odoo?wipe_old_data=${wipeOldData}`, { method: 'POST' });
+export interface OdooConfigPayload {
+  odoo_url?: string;
+  odoo_db?: string;
+  odoo_user?: string;
+  odoo_pass?: string;
+  wipe_old_data?: boolean;
+}
+
+export interface OdooConnectionTestResult {
+  status: 'success' | 'error';
+  connected: boolean;
+  authenticated?: boolean;
+  uid?: number;
+  server_version?: string;
+  message: string;
+  suggested_url?: string | null;
+  error_detail?: string;
+}
+
+export async function fetchOdooConfig(): Promise<{ url: string; db: string; user: string }> {
+  try {
+    return await apiFetch<{ url: string; db: string; user: string }>('/admin/odoo-config');
+  } catch {
+    return {
+      url: 'http://192.168.100.2:8069',
+      db: 'BilalClothHouse',
+      user: 'bchnarowal@gmail.com',
+    };
+  }
+}
+
+export async function testOdooConnection(data?: OdooConfigPayload): Promise<OdooConnectionTestResult> {
+  return await apiFetch<OdooConnectionTestResult>('/admin/test-odoo-connection', {
+    method: 'POST',
+    body: JSON.stringify(data || {}),
+  });
+}
+
+export async function wipeAndSyncOdoo(params?: boolean | OdooConfigPayload): Promise<any> {
+  if (typeof params === 'boolean') {
+    return await apiFetch<any>(`/admin/wipe-and-sync-odoo?wipe_old_data=${params}`, {
+      method: 'POST',
+    });
+  }
+  const wipe = params?.wipe_old_data !== false;
+  return await apiFetch<any>(`/admin/wipe-and-sync-odoo?wipe_old_data=${wipe}`, {
+    method: 'POST',
+    body: JSON.stringify(params || {}),
+  });
 }
 
 export async function syncOdooEmployees(): Promise<any> {

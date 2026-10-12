@@ -28,12 +28,15 @@ export async function discoverLocalServer(): Promise<{ success: boolean; url: st
 
   const candidates: string[] = [
     currentBase,
+    'http://bilalclothpos.com:8000',
+    'http://bilalclothpos.com',
     'http://localhost:8000',
     'http://127.0.0.1:8000',
     `http://${host}:8000`,
-    'http://pos-server.local:8000',
+    'http://192.168.100.70:8000',
     'http://192.168.100.2:8000',
     'http://192.168.100.1:8000',
+    'http://pos-server.local:8000',
   ];
 
   if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host)) {
@@ -101,16 +104,21 @@ export async function testServerConnection(targetIp?: string): Promise<{ success
   }
 }
 
-export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
+export async function apiFetch<T>(path: string, options?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const apiBase = getApiBaseUrl();
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  
+  // High-volume operations like Odoo ERP sync need more time (up to 120s)
+  const isHeavyOp = path.includes('odoo') || path.includes('sync') || path.includes('wipe') || path.includes('backup') || path.includes('restore');
+  const timeoutMs = options?.timeoutMs ?? (isHeavyOp ? 120000 : 15000);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
+    const { timeoutMs: _, ...fetchOptions } = options || {};
     const res = await fetch(`${apiBase}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...options?.headers },
+      headers: { 'Content-Type': 'application/json', ...fetchOptions?.headers },
       signal: controller.signal,
-      ...options,
+      ...fetchOptions,
     });
     clearTimeout(timeoutId);
 

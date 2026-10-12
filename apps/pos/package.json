@@ -8,6 +8,7 @@
     "build": "next build",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
+    "desktop:build:x86": "tauri build --target i686-pc-windows-msvc",
     "start": "next start",
     "lint": "eslint --max-warnings 0"
   },
