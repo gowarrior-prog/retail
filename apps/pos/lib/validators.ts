@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sanitizeText, sanitizeBarcode, sanitizePhone } from './sanitize';
 
 export const ProductSchema = z.object({
   id: z.string(),
@@ -19,15 +20,15 @@ export const ProductSchema = z.object({
 
 export const ProductCreateSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, 'Product name is required'),
+  name: z.string().min(1, 'Product name is required').transform(sanitizeText),
   price: z.number().nonnegative('Price must be non-negative').default(0),
   cost_price: z.number().nonnegative().optional().default(0),
   profit_margin: z.number().optional().default(0),
-  category: z.string().optional().default('General'),
+  category: z.string().optional().default('General').transform(sanitizeText),
   image_url: z.string().nullable().optional(),
   stock: z.number().int().nonnegative().optional().default(0),
-  barcode: z.string().optional(),
-  sku: z.string().optional(),
+  barcode: z.string().optional().transform(sanitizeBarcode),
+  sku: z.string().optional().transform(sanitizeBarcode),
 });
 
 export const EmployeeSchema = z.object({
@@ -45,26 +46,26 @@ export const EmployeeSchema = z.object({
 
 export const EmployeeCreateSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, 'Name is required'),
-  phone: z.string().min(10, 'Valid phone number required'),
-  cnic: z.string().optional(),
-  role: z.string().optional().default('SALES_EXECUTIVE'),
+  name: z.string().min(1, 'Name is required').transform(sanitizeText),
+  phone: z.string().min(10, 'Valid phone number required').transform(sanitizePhone),
+  cnic: z.string().optional().transform(sanitizeBarcode),
+  role: z.string().optional().default('SALES_EXECUTIVE').transform(sanitizeText),
   base_salary: z.number().positive('Base salary must be positive'),
-  attendance_status: z.string().optional().default('PRESENT'),
+  attendance_status: z.string().optional().default('PRESENT').transform(sanitizeText),
 });
 
 export const SupplierCreateSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, 'Supplier name is required'),
-  phone: z.string().optional(),
+  name: z.string().min(1, 'Supplier name is required').transform(sanitizeText),
+  phone: z.string().optional().transform(sanitizePhone),
   balance: z.number().optional().default(0),
 });
 
 export const KhataCustomerCreateSchema = z.object({
   id: z.string().optional(),
-  name: z.string().min(1, 'Customer name is required'),
-  phone: z.string().optional(),
-  address: z.string().optional(),
+  name: z.string().min(1, 'Customer name is required').transform(sanitizeText),
+  phone: z.string().optional().transform(sanitizePhone),
+  address: z.string().optional().transform(sanitizeText),
   balance: z.number().optional().default(0),
 });
 

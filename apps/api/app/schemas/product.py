@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
+from app.core.sanitizer import sanitize_text, sanitize_barcode
 
 class ProductCreate(BaseModel):
     id: Optional[str] = None
@@ -15,6 +16,16 @@ class ProductCreate(BaseModel):
     category: Optional[str] = "General"
     image_url: Optional[str] = None
     odoo_id: Optional[int] = None
+
+    @field_validator("name", "description", "category", mode="before")
+    @classmethod
+    def sanitize_string_fields(cls, v):
+        return sanitize_text(v) if isinstance(v, str) else v
+
+    @field_validator("sku", "barcode", mode="before")
+    @classmethod
+    def sanitize_barcode_fields(cls, v):
+        return sanitize_barcode(v) if isinstance(v, str) else v
 
 class ProductResponse(BaseModel):
     id: str

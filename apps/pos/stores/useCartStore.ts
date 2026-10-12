@@ -1,5 +1,6 @@
 'use client';
 import { create } from 'zustand';
+import { sanitizeText, sanitizeBarcode, sanitizePhone, sanitizeUrl } from '@/lib/sanitize';
 
 export interface CartItem {
   id: string;
@@ -140,13 +141,13 @@ export const useCartStore = create<CartState>((set, get) => ({
     return {
       items: [...state.items, {
         id: product.id,
-        name: product.name,
+        name: sanitizeText(product.name || 'Unnamed Item'),
         price: product.price || 0,
         cost_price: product.cost_price || 0,
         quantity: 1,
-        image_url: product.image_url || null,
-        sku: product.barcode || product.sku || (product.id ? product.id.slice(0, 8) : 'SKU-NEW'),
-        category: product.category || 'General',
+        image_url: sanitizeUrl(product.image_url),
+        sku: sanitizeBarcode(product.barcode || product.sku || (product.id ? product.id.slice(0, 8) : 'SKU-NEW')),
+        category: sanitizeText(product.category || 'General'),
         discount: 0,
       }],
     };
@@ -173,13 +174,13 @@ export const useCartStore = create<CartState>((set, get) => ({
   setGlobalDiscount: (discount: number) => set({ globalDiscount: Math.max(0, Math.min(100, discount)) }),
   setTaxRate: (rate: number) => set({ taxRate: 0 }),
   setTenderedAmount: (amount: string) => set({ tenderedAmount: amount }),
-  setOrderNote: (note: string) => set({ orderNote: note }),
+  setOrderNote: (note: string) => set({ orderNote: sanitizeText(note) }),
   setGiftReceipt: (v: boolean) => set({ giftReceipt: v }),
   setEmailCopy: (v: boolean) => set({ emailCopy: v }),
-  setCustomerName: (name: string) => set({ customerName: name }),
-  setCustomerPhone: (phone: string) => set({ customerPhone: phone }),
-  setPaymentMode: (mode: string) => set({ paymentMode: mode }),
-  setCashierName: (name: string) => set({ cashierName: name }),
+  setCustomerName: (name: string) => set({ customerName: sanitizeText(name) }),
+  setCustomerPhone: (phone: string) => set({ customerPhone: sanitizePhone(phone) }),
+  setPaymentMode: (mode: string) => set({ paymentMode: sanitizeBarcode(mode) }),
+  setCashierName: (name: string) => set({ cashierName: sanitizeText(name) }),
   clearCart: () => set({ items: [], globalDiscount: 0, tenderedAmount: '', orderNote: '', customerName: '', customerPhone: '' }),
 
   holdCurrentOrder: () => {
