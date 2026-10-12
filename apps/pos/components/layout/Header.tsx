@@ -8,6 +8,7 @@ import { discoverLocalServer } from '@/lib/api';
 import CashierSelectModal from '@/components/checkout/CashierSelectModal';
 import HoldOrdersModal from '@/components/checkout/HoldOrdersModal';
 import OdooSyncModal from '@/components/odoo/OdooSyncModal';
+import SecurePrice from '@/components/security/SecurePrice';
 
 export default function Header() {
   const { loadProducts } = useProductStore();
@@ -99,7 +100,7 @@ export default function Header() {
             <div className="w-5 h-5 rounded-full bg-slate-300 text-slate-700 flex items-center justify-center font-bold text-[10px]">
               <User className="w-3 h-3 text-slate-600" />
             </div>
-            <span>{currentCashier}</span>
+            <SecurePrice amount={currentCashier} isRawString={true} type="cashier" className="text-xs font-bold text-slate-700 font-sans" />
           </button>
 
           {/* Action Icons */}

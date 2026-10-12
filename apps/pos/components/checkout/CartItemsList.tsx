@@ -4,6 +4,7 @@ import React from 'react';
 import { ShoppingCart, Minus, Plus, Trash2 } from 'lucide-react';
 import { type CartItem } from '@/stores/useCartStore';
 import { formatCurrency } from '@/lib/utils';
+import SecurePrice from '@/components/security/SecurePrice';
 
 interface CartItemsListProps {
   items: CartItem[];
@@ -62,8 +63,9 @@ export default function CartItemsList({
                 >
                   <div className="flex-1 pr-2 min-w-0">
                     <h4 className="text-xs font-bold text-slate-900 truncate">{item.name}</h4>
-                    <p className="text-[10.5px] text-slate-500 mt-0.5 font-mono">
-                      {item.quantity} × <span className="font-semibold text-slate-700">{formatCurrency(item.price)}</span>
+                    <p className="text-[10.5px] text-slate-500 mt-0.5 font-mono flex items-center gap-1">
+                      <span>{item.quantity} ×</span>
+                      <SecurePrice amount={item.price} type="price" className="font-semibold text-slate-700" />
                     </p>
                   </div>
 
@@ -90,9 +92,11 @@ export default function CartItemsList({
                       </button>
                     </div>
 
-                    <span className="w-16 text-right text-xs font-bold font-mono text-slate-900">
-                      {formatCurrency(lineTotal)}
-                    </span>
+                    <SecurePrice
+                      amount={lineTotal}
+                      type="price"
+                      className="w-16 text-right text-xs font-bold text-slate-900"
+                    />
 
                     <button
                       onClick={(e) => {

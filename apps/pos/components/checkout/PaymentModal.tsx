@@ -10,6 +10,7 @@ import { showProfessionalAlert } from '@/lib/alert';
 import { showCatalogToast } from '@/lib/toast';
 import { playToastAudio } from '@/lib/toastAudio';
 import ThermalReceiptContent from './ThermalReceiptContent';
+import SecurePrice from '@/components/security/SecurePrice';
 
 export default function PaymentModal({ onClose }: { onClose: () => void }) {
   const { items, grandTotal, subtotal, discountTotal, clearCart, cashierName } = useCartStore();
@@ -139,7 +140,7 @@ export default function PaymentModal({ onClose }: { onClose: () => void }) {
             {/* Net Payable Banner */}
             <div className="bg-gray-200 rounded-xl p-4 border  flex items-center justify-between text-white shadow-sm ">
               <span className="text-xs font-semibold uppercase tracking-wider font-sans text-black">Net Payable:</span>
-              <span className="text-2xl font-bold font-mono text-black">{formatCurrency(total)}</span>
+              <SecurePrice amount={total} type="net_payable" className="text-2xl font-bold text-black" />
             </div>
             <button
               onClick={handleProcessCheckout}
