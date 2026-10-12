@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 from app.schemas.auth import (
     SendOTPRequest,
@@ -70,12 +71,15 @@ async def send_email_otp_endpoint(req: SendEmailOTPRequest):
 
     success, msg = send_email_otp(norm_email, otp)
     if not success:
-        return {
+        debug_otp = otp if os.getenv("DEBUG_AUTH_OTP", "false").lower() == "true" else None
+        res_data = {
             "status": "pending_smtp_credentials",
-            "message": msg,
-            "generated_otp_debug": otp,
+            "message": "Verification code generated. Please configure SMTP credentials to deliver email.",
             "expires_in_seconds": 300
         }
+        if debug_otp:
+            res_data["generated_otp_debug"] = debug_otp
+        return res_data
 
     return {
         "status": "success",

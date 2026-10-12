@@ -1,3 +1,5 @@
+import os
+import hmac
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, HTTPException, Query
@@ -36,14 +38,29 @@ class OdooSyncPayload(BaseModel):
     odoo_user: Optional[str] = None
     odoo_pass: Optional[str] = None
 
+ALLOWED_PURGE_TABLES = {
+    "products",
+    "employees",
+    "billing_history",
+    "customer_khata",
+    "shop_purchases",
+    "customer_returns",
+    "supplier_returns",
+}
+
 @router.delete("/purge-table")
 async def super_admin_purge_table(
     target_db: str = Query(..., description="db1, db2, or db3"),
     table_name: str = Query(..., description="Exact table name to purge e.g. products, employees, billing_history"),
     admin_secret: str = Query(..., description="Super Admin authorization key")
 ):
-    if admin_secret != "SUPER_ADMIN_SECRET_KEY":
+    expected_secret = os.getenv("SUPER_ADMIN_SECRET_KEY", "Bilal_Cloth_Super_Admin_SecKey_2026_@#")
+    if not hmac.compare_digest(admin_secret, expected_secret):
         raise HTTPException(status_code=403, detail="Unauthorized Super Admin access")
+
+    clean_table = table_name.strip().lower()
+    if clean_table not in ALLOWED_PURGE_TABLES:
+        raise HTTPException(status_code=400, detail=f"Table '{table_name}' is not in the allowed purge whitelist.")
 
     session_map = {
         "db1": SessionDb1,
@@ -56,7 +73,8 @@ async def super_admin_purge_table(
     SessionClass = session_map[target_db.lower()]
     async with SessionClass() as db:
         try:
-            await db.execute(text(f'TRUNCATE TABLE "{table_name}" CASCADE;'))
+            # Safe execution using validated whitelist identifier
+            await db.execute(text(f'TRUNCATE TABLE "{clean_table}" CASCADE;'))
             await db.commit()
             return {"message": f"Successfully purged table '{table_name}' in '{target_db}'."}
         except Exception as e:

@@ -440,8 +440,8 @@ def delete_local_purchase(pur_id: str):
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute(
-        "DELETE FROM local_purchases WHERE id = ? OR LOWER(supplier_name) = LOWER(?) OR id LIKE ?",
-        (pur_str, pur_str, f"%{pur_str}%")
+        "DELETE FROM local_purchases WHERE id = ? OR LOWER(supplier_name) = LOWER(?)",
+        (pur_str, pur_str)
     )
     conn.commit()
     conn.close()
