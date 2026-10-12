@@ -148,3 +148,13 @@ export const useProductStore = create<ProductState>((set, get) => ({
     set({ products: updated, filteredProducts: filtered });
   },
 }));
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('catalog-updated', () => {
+    useProductStore.getState().loadProducts(true);
+  });
+  window.addEventListener('pos-data-updated', () => {
+    useProductStore.getState().loadProducts(true);
+  });
+}
+

@@ -5,22 +5,17 @@ import {
   Sparkles,
   ShoppingCart,
   X,
-  Send,
   Mic,
-  MicOff,
   Plus,
-  RefreshCw,
-  Zap,
-  ShieldCheck,
   TrendingUp,
   Flame,
   Printer,
   BookOpen,
   Lock,
-  CheckCircle,
-  AlertTriangle,
-  ArrowRight,
   Trash2,
+  UserCheck,
+  Package,
+  ArrowUp,
 } from 'lucide-react';
 import { chatWithAI, fetchAIStatus, NLOrderItem, AIChatResult } from '@/lib/api/ai';
 import { useCartStore } from '@/stores/useCartStore';
@@ -35,14 +30,85 @@ interface ChatMessage {
   items?: NLOrderItem[];
   analytics_data?: AIChatResult['analytics_data'];
   ledger_data?: AIChatResult['ledger_data'];
+  product_data?: AIChatResult['product_data'];
+  employee_data?: AIChatResult['employee_data'];
   print_data?: AIChatResult['print_data'];
   requires_pin?: boolean;
   action_executed?: string | null;
   timestamp: string;
 }
 
+const nowTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+/* Numbers count up when a card appears */
+function CountUp({ value, prefix = '' }: { value: number; prefix?: string }) {
+  const [display, setDisplay] = useState(0);
+  useEffect(() => {
+    let raf = 0;
+    const start = performance.now();
+    const duration = 900;
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(value * eased));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return (
+    <>
+      {prefix}
+      {display.toLocaleString()}
+    </>
+  );
+}
+
+/* "Thread being woven" loader shown while the AI is thinking */
+function ThreadLoader() {
+  return (
+    <div className="aim-row-in flex items-center gap-2.5 py-1">
+      <div className="aim-avatar-sm">
+        <Sparkles className="w-3 h-3" />
+      </div>
+      <div className="aim-typing">
+        <svg viewBox="0 0 72 18" width="72" height="18" fill="none" aria-hidden="true">
+          <path
+            className="aim-thread-base"
+            d="M2 9 C 10 1, 18 17, 27 9 S 45 1, 54 9 S 64 15, 70 9"
+          />
+          <path
+            className="aim-thread-run"
+            d="M2 9 C 10 1, 18 17, 27 9 S 45 1, 54 9 S 64 15, 70 9"
+          />
+        </svg>
+        <span className="aim-typing-text">Soch raha hoon</span>
+      </div>
+    </div>
+  );
+}
+
+function ProductThumb({ alt }: { alt: string }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="aim-thumb">
+      {failed ? (
+        <Package className="w-6 h-6 text-[#0b1d15]/50" />
+      ) : (
+        <img
+          src="/Screenshot 2026-09-26 210204.svg"
+          alt={alt}
+          className="w-full h-full object-contain"
+          onError={() => setFailed(true)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function AIManagerWidget() {
   const [isOpen, setIsOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -57,19 +123,26 @@ export default function AIManagerWidget() {
   const recognitionRef = useRef<any>(null);
   const chatScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // messages at index < this are "old" (no entrance animation when window re-opens)
+  const seenCountRef = useRef(0);
 
-  const { items: cartItems, addItem, addMultipleItems } = useCartStore();
+  const {
+    items: cartItems,
+    addItem,
+    addMultipleItems,
+    updateQuantity,
+    removeItem,
+    clearCart,
+    setItemDiscount,
+    cashierName,
+  } = useCartStore();
   const totalCartCount = cartItems.reduce((acc, i) => acc + i.quantity, 0);
 
-  // Initial AI status & load persistent chat history from localStorage
+  // Initial AI status & load persistent chat history
   useEffect(() => {
     fetchAIStatus()
-      .then((status) => {
-        setAiEngine(status.primary_engine || 'gemini_cloud');
-      })
-      .catch(() => {
-        setAiEngine('gemini_cloud');
-      });
+      .then((status) => setAiEngine(status.primary_engine || 'gemini_cloud'))
+      .catch(() => setAiEngine('gemini_cloud'));
 
     try {
       const saved = localStorage.getItem('bilal_ai_chat_history');
@@ -89,13 +162,13 @@ export default function AIManagerWidget() {
         id: 'msg-1',
         sender: 'ai',
         intent: 'chat',
-        text: 'Assalam-o-Alaikum! Main Bilal Cloth ka AI Manager hoon. Aap mujh se sales analytics, fabric market trends, billing orders, khata ledger, ya koi bhi science o aam maloomat poch sakte hain.',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: 'Main Bilal Cloth ka AI Manager hoon. Aap mujh se sales analytics, fabric market trends, billing orders, khata ledger, ya koi bhi aam maloomat poch sakte hain.',
+        timestamp: nowTime(),
       },
     ]);
   }, []);
 
-  // Persist messages to localStorage whenever they update
+  // Persist messages
   useEffect(() => {
     if (messages.length > 0) {
       try {
@@ -106,24 +179,7 @@ export default function AIManagerWidget() {
     }
   }, [messages]);
 
-  // Clear Chat History Handler
-  const handleClearChatHistory = () => {
-    try {
-      localStorage.removeItem('bilal_ai_chat_history');
-    } catch {}
-    setMessages([
-      {
-        id: `msg-${Date.now()}`,
-        sender: 'ai',
-        intent: 'chat',
-        text: 'Chat history saaf ho gayi hai. Main aapki kya madad karoon?',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
-    showCatalogToast('✓ Chat history cleared', 'scan');
-  };
-
-  // Auto-scroll chat to bottom smoothly
+  // Auto-scroll
   useEffect(() => {
     if (chatScrollRef.current) {
       chatScrollRef.current.scrollTo({
@@ -133,7 +189,48 @@ export default function AIManagerWidget() {
     }
   }, [messages, isProcessing, isOpen]);
 
-  // Speech Recognition setup
+  // Focus input when window opens
+  useEffect(() => {
+    if (isOpen && !isClosing) {
+      const t = setTimeout(() => inputRef.current?.focus(), 380);
+      return () => clearTimeout(t);
+    }
+  }, [isOpen, isClosing]);
+
+  // Open / close with exit animation
+  const openWindow = () => {
+    seenCountRef.current = messages.length;
+    setIsClosing(false);
+    setIsOpen(true);
+  };
+  const closeWindow = () => {
+    setIsClosing(true);
+    setTimeout(() => {
+      setIsOpen(false);
+      setIsClosing(false);
+    }, 220);
+  };
+  const toggleWindow = () => (isOpen && !isClosing ? closeWindow() : openWindow());
+
+  const handleClearChatHistory = () => {
+    try {
+      localStorage.removeItem('bilal_ai_chat_history');
+    } catch {}
+    seenCountRef.current = 0;
+    setPinPromptMessageId(null);
+    setEnteredPin('');
+    setMessages([
+      {
+        id: `msg-${Date.now()}`,
+        sender: 'ai',
+        intent: 'chat',
+        text: 'Chat history saaf ho gayi hai. Main aapki kya madad karoon?',
+        timestamp: nowTime(),
+      },
+    ]);
+    showCatalogToast('✓ Chat history cleared', 'scan');
+  };
+
   const toggleSpeech = () => {
     if (typeof window === 'undefined') return;
     const SpeechRecognition =
@@ -179,25 +276,116 @@ export default function AIManagerWidget() {
 
     setInputMessage('');
 
-    // Add user message to feed
     const userMsg: ChatMessage = {
       id: `usr-${Date.now()}`,
       sender: 'user',
       text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: nowTime(),
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsProcessing(true);
+
+    const lowerText = text.toLowerCase();
+
+    // ── SECURE CART MUTATION HANDLERS (Client-Side State Safe) ──
+    // 1. Clear cart / bill
+    if (
+      lowerText.includes('clear cart') ||
+      lowerText.includes('clear bill') ||
+      lowerText.includes('khali karo cart') ||
+      lowerText.includes('cart clear karo') ||
+      lowerText.includes('saaf karo cart')
+    ) {
+      clearCart();
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        intent: 'cart_mutation',
+        text: '✓ Cart and billing table have been cleared safely.',
+        timestamp: nowTime(),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+      showCatalogToast('✓ Cart cleared safely', 'scan');
+      return;
+    }
+
+    // 2. Remove specific item from cart
+    const removeMatch = lowerText.match(/(?:remove|delete|hatao|nikalo)\s+([a-z0-9\s]+?)\s+(?:from\s+cart|cart\s+se)/i);
+    if (removeMatch && removeMatch[1]) {
+      const targetQuery = removeMatch[1].trim().toLowerCase();
+      const foundItem = cartItems.find((i) =>
+        i.name.toLowerCase().includes(targetQuery) || i.sku.toLowerCase() === targetQuery
+      );
+      if (foundItem) {
+        removeItem(foundItem.id);
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          intent: 'cart_mutation',
+          text: `✓ Removed "${foundItem.name}" from cart.`,
+          timestamp: nowTime(),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+        showCatalogToast(`✓ Removed ${foundItem.name}`, 'scan');
+        return;
+      }
+    }
+
+    // 3. Update quantity in cart
+    const qtyMatch = lowerText.match(/(?:change|update|set|badlo|karo)\s+([a-z0-9\s]+?)\s+quantity\s+(?:to|=)\s*(\d+)/i) ||
+                     lowerText.match(/(?:change|update|set|badlo|karo)\s+quantity\s+of\s+([a-z0-9\s]+?)\s+(?:to|=)\s*(\d+)/i);
+    if (qtyMatch && qtyMatch[1] && qtyMatch[2]) {
+      const targetQuery = qtyMatch[1].trim().toLowerCase();
+      const newQty = Math.max(1, Math.min(500, parseInt(qtyMatch[2], 10)));
+      const foundItem = cartItems.find((i) =>
+        i.name.toLowerCase().includes(targetQuery) || i.sku.toLowerCase() === targetQuery
+      );
+      if (foundItem) {
+        updateQuantity(foundItem.id, newQty);
+        const aiMsg: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          sender: 'ai',
+          intent: 'cart_mutation',
+          text: `✓ Updated "${foundItem.name}" quantity to ${newQty}.`,
+          timestamp: nowTime(),
+        };
+        setMessages((prev) => [...prev, aiMsg]);
+        showCatalogToast(`✓ Quantity updated: ${newQty}`, 'scan');
+        return;
+      }
+    }
+
+    // 4. Reset/Remove discount from item
+    if (
+      lowerText.includes('remove discount') ||
+      lowerText.includes('discount hatao') ||
+      lowerText.includes('zero discount')
+    ) {
+      cartItems.forEach((item) => setItemDiscount(item.id, 0));
+      const aiMsg: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        sender: 'ai',
+        intent: 'cart_mutation',
+        text: '✓ All promotional discounts removed from cart items.',
+        timestamp: nowTime(),
+      };
+      setMessages((prev) => [...prev, aiMsg]);
+      showCatalogToast('✓ Discounts reset to 0%', 'scan');
+      return;
+    }
 
     try {
       const historyPayload = messages.map((m) => ({
         sender: m.sender,
         text: m.text || '',
       }));
-      const res = await chatWithAI(text, historyPayload, withPin);
-      if (res.engine) {
-        setAiEngine(res.engine as any);
-      }
+      const activeRole = (cashierName || '').toLowerCase().includes('admin') ||
+                         (cashierName || '').toLowerCase().includes('owner') ||
+                         (cashierName || '').toLowerCase().includes('manager')
+                           ? 'manager'
+                           : 'cashier';
+      const res = await chatWithAI(text, historyPayload, withPin, activeRole, cashierName || 'cashier-1');
+      if (res.engine) setAiEngine(res.engine as any);
 
       const aiMsgId = `ai-${Date.now()}`;
       const newAiMsg: ChatMessage = {
@@ -208,10 +396,12 @@ export default function AIManagerWidget() {
         items: res.items,
         analytics_data: res.analytics_data,
         ledger_data: res.ledger_data,
+        product_data: res.product_data,
+        employee_data: res.employee_data,
         print_data: res.print_data,
         requires_pin: res.requires_pin,
         action_executed: res.action_executed,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: nowTime(),
       };
 
       setMessages((prev) => [...prev, newAiMsg]);
@@ -222,6 +412,7 @@ export default function AIManagerWidget() {
           window.dispatchEvent(new CustomEvent('khata-updated'));
           window.dispatchEvent(new CustomEvent('pos-data-updated'));
           window.dispatchEvent(new CustomEvent('catalog-updated'));
+          window.dispatchEvent(new CustomEvent('employee-updated'));
         }
       }
 
@@ -231,7 +422,7 @@ export default function AIManagerWidget() {
         setPinPromptMessageId(null);
         setEnteredPin('');
       }
-    } catch (err: any) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -239,7 +430,7 @@ export default function AIManagerWidget() {
           sender: 'ai',
           intent: 'chat',
           text: 'Main aapka paigham process nahi kar saka. Barah-e-karam dobara koshish karein.',
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          timestamp: nowTime(),
         },
       ]);
     } finally {
@@ -309,366 +500,388 @@ export default function AIManagerWidget() {
     }
   };
 
-  const quickPills = [
-    { label: '📊 Today Analytics', prompt: 'give me today sales analytics' },
-    { label: '🔥 Market Trends', prompt: 'latest market fabric trends' },
-    { label: '📋 Khata Dues', prompt: 'customer khata ledger summary' },
-    { label: '🖨️ Print Last Bill', prompt: 'print last bill receipt' },
-    { label: '2 Cotton Suits', prompt: '2 cotton suits' },
-    { label: 'Pure Boski', prompt: 'Pure Boski' },
+  const quickActions = [
+    { label: 'Aaj ki sales', hint: 'Revenue aur bills', prompt: 'give me today sales analytics', Icon: TrendingUp },
+    { label: 'Market trends', hint: 'Kya chal raha hai', prompt: 'latest market fabric trends', Icon: Flame },
+    { label: 'Khata dues', hint: 'Udhaar ka hisaab', prompt: 'customer khata ledger summary', Icon: BookOpen },
+    { label: 'Last bill print', hint: 'Thermal receipt', prompt: 'print last bill receipt', Icon: Printer },
   ];
 
+  const isOnline = aiEngine === 'gemini_cloud';
+  const showWelcomeGrid = messages.length <= 1 && !isProcessing;
+  const canSend = inputMessage.trim().length > 0 && !isProcessing;
+
   return (
-    <>
-      {/* 🚀 Floating Pill Trigger Button in Bottom-Right Corner with micro-glow */}
-      <div className="fixed bottom-5 right-5 z-50 select-none">
+    <div className="aim-scope">
+      {/* ───────── Floating launcher ───────── */}
+      <div className="fixed bottom-5 right-5 z-50 select-none aim-launcher-wrap" data-open={isOpen}>
         <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="group relative flex items-center bg-black hover:bg-zinc-900 text-white rounded-full p-1.5 pr-4 shadow-2xl border border-zinc-700/80 transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer"
-          title="Open Bilal Cloth AI Manager"
+          onClick={toggleWindow}
+          className="aim-launcher"
+          title="Bilal Cloth AI Manager"
+          aria-label="Open AI Manager"
+          aria-expanded={isOpen}
         >
-          {/* White circle with black four-pointed sparkle icon */}
-          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black shadow-md mr-2.5 shrink-0 transition-transform group-hover:rotate-12 duration-300">
-            <Sparkles className="w-4.5 h-4.5 fill-black text-black" />
-          </div>
-
-          {/* Text label "Shop with AI" */}
-          <span className="font-semibold text-xs tracking-wide text-zinc-100 group-hover:text-white">
-            Shop with AI
+          <span className="aim-launcher-ring" />
+          <span className="aim-launcher-body">
+            <span className="aim-launcher-icon">
+              <Sparkles className="aim-launcher-spark w-[18px] h-[18px]" />
+            </span>
+            <span className="aim-launcher-label">AI Manager</span>
           </span>
-
-          {/* Online engine green indicator dot */}
-          <span className="absolute -top-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-black animate-pulse" />
         </button>
+        <span className="aim-status-dot" data-online={isOnline}>
+          <span className="aim-status-ping" />
+        </span>
       </div>
 
-      {/* 🪟 Sleek Dark Theme AI Assistant Window (Animated entrance) */}
+      {/* ───────── Chat window ───────── */}
       {isOpen && (
-        <div className="fixed bottom-20 right-5 z-50 w-[410px] max-w-[94vw] h-[610px] max-h-[86vh] bg-[#1c1c1e] text-white rounded-3xl shadow-2xl border border-zinc-800/90 flex flex-col font-sans overflow-hidden animate-in fade-in zoom-in-95 slide-in-from-bottom-4 duration-300 backdrop-blur-xl">
-          {/* ─── Header ─── */}
-          <div className="px-4 py-3 bg-[#1c1c1e]/90 border-b border-zinc-800/70 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-black shrink-0 shadow-sm">
-                <Sparkles className="w-4 h-4 fill-black text-black" />
+        <div
+          className="aim-window fixed bottom-24 right-5 z-50 w-[420px] max-w-[94vw] h-[640px] max-h-[calc(100vh-7.5rem)] flex flex-col overflow-hidden"
+          data-state={isClosing ? 'closing' : 'open'}
+          role="dialog"
+          aria-label="AI Manager chat"
+        >
+          {/* Header */}
+          <div className="aim-header shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="aim-orb">
+                <span className="aim-orb-core">
+                  <Sparkles className="w-[18px] h-[18px]" />
+                </span>
               </div>
-              <div>
-                <h3 className="font-bold text-sm tracking-wide text-white leading-tight flex items-center gap-1.5">
-                  Bilal Cloth AI
-                  <span className="text-[9px] px-1.5 py-0.2 bg-emerald-500/20 text-emerald-300 rounded-full font-semibold border border-emerald-500/30">
-                    Manager
-                  </span>
-                </h3>
-                <span className="text-[10px] text-zinc-400 font-medium flex items-center gap-1">
-                  {aiEngine === 'gemini_cloud' ? (
-                    <>
-                      <Zap className="w-2.5 h-2.5 text-emerald-400" /> Gemini Intelligence
-                    </>
-                  ) : (
-                    <>
-                      <ShieldCheck className="w-2.5 h-2.5 text-amber-400" /> Offline 0ms
-                    </>
-                  )}
+              <div className="leading-tight">
+                <h3 className="aim-title">AI Manager</h3>
+                <span className="aim-sub">
+                  <span className="aim-dot-live" data-online={isOnline} />
+                  {isOnline ? 'Online' : 'Offline mode'} · Bilal Cloth &amp; Silk
                 </span>
               </div>
             </div>
 
-            {/* Header Right Action Icons */}
-            <div className="flex items-center gap-1.5 text-zinc-400">
-              {/* Clear chat history button */}
-              <button
-                onClick={handleClearChatHistory}
-                className="p-1.5 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition cursor-pointer"
-                title="Clear AI Chat History"
-              >
+            <div className="flex items-center gap-1">
+              <button onClick={handleClearChatHistory} className="aim-icon-btn aim-icon-danger" title="Chat saaf karein">
                 <Trash2 className="w-4 h-4" />
               </button>
-
-              <button
-                className="relative p-1.5 hover:text-white hover:bg-zinc-800 rounded-lg transition cursor-pointer"
-                title={`Cart: ${totalCartCount} items`}
-              >
+              <button className="aim-icon-btn relative" title={`Cart: ${totalCartCount} items`}>
                 <ShoppingCart className="w-4 h-4" />
                 {totalCartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-white text-black font-extrabold text-[9px] flex items-center justify-center shadow-xs">
+                  <span key={totalCartCount} className="aim-cart-badge">
                     {totalCartCount}
                   </span>
                 )}
               </button>
-
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-1.5 hover:text-white hover:bg-zinc-800 rounded-lg transition cursor-pointer"
-                title="Close AI Assistant"
-              >
+              <button onClick={closeWindow} className="aim-icon-btn" title="Band karein">
                 <X className="w-4 h-4" />
               </button>
             </div>
           </div>
+          <div className="aim-header-line shrink-0" />
 
-          {/* ─── Scrollable Chat Feed ─── */}
-          <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-4 space-y-3.5 text-xs">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex flex-col transition-all duration-300 animate-in fade-in slide-in-from-bottom-2 ${
-                  msg.sender === 'user' ? 'items-end' : 'items-start'
-                }`}
-              >
-                {/* User Message Bubble */}
-                {msg.sender === 'user' && (
-                  <div className="bg-white text-zinc-950 px-3.5 py-2 rounded-2xl rounded-tr-xs max-w-[85%] font-medium text-xs shadow-sm">
-                    {msg.text}
-                  </div>
-                )}
+          {/* Feed */}
+          <div ref={chatScrollRef} className="aim-feed aim-scroll flex-1 overflow-y-auto px-4 py-4 space-y-4">
+            {messages.map((msg, idx) => {
+              const fresh = idx >= seenCountRef.current;
+              const isUser = msg.sender === 'user';
+              return (
+                <div
+                  key={msg.id}
+                  className={`flex ${isUser ? 'justify-end' : 'justify-start'} ${
+                    fresh ? (isUser ? 'aim-in-right' : 'aim-in-up') : ''
+                  }`}
+                >
+                  {/* User bubble */}
+                  {isUser && (
+                    <div className="max-w-[82%] flex flex-col items-end gap-1">
+                      <div className="aim-bubble-user">{msg.text}</div>
+                      <span className="aim-time">{msg.timestamp}</span>
+                    </div>
+                  )}
 
-                {/* AI Assistant Message Bubble & Specialized Cards */}
-                {msg.sender === 'ai' && (
-                  <div className="space-y-2.5 max-w-[100%] w-full">
-                    {msg.text && (
-                      <div className="bg-[#27272a]/70 border border-zinc-800 rounded-2xl px-3.5 py-2.5 text-zinc-200 text-xs leading-relaxed whitespace-pre-line shadow-xs">
-                        {msg.text}
+                  {/* AI bubble + cards */}
+                  {!isUser && (
+                    <div className="flex items-start gap-2.5 w-full">
+                      <div className="aim-avatar-sm mt-0.5">
+                        <Sparkles className="w-3 h-3" />
                       </div>
-                    )}
-
-                    {/* 1. 📊 ANALYTICS DATA CARD */}
-                    {msg.analytics_data && (
-                      <div className="bg-gradient-to-br from-[#27272a] to-[#1f1f23] border border-zinc-700/80 rounded-2xl p-3 space-y-2.5 shadow-md">
-                        <div className="flex items-center justify-between border-b border-zinc-700/60 pb-2">
-                          <span className="font-bold text-xs text-white flex items-center gap-1.5">
-                            <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                            Store Daily Performance
-                          </span>
-                          <span className="text-[10px] bg-emerald-950 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-800/60 font-semibold">
-                            Live Telemetry
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2 text-[11px]">
-                          <div className="bg-zinc-800/80 rounded-xl p-2 border border-zinc-700/50">
-                            <span className="text-zinc-400 block text-[10px]">Today's Sales</span>
-                            <span className="font-extrabold text-white text-xs">
-                              Rs {msg.analytics_data.today_revenue?.toLocaleString() || '0'}
-                            </span>
+                      <div className="flex-1 min-w-0 space-y-2.5">
+                        {msg.text && (
+                          <div className="flex flex-col items-start gap-1">
+                            <div className="aim-bubble-ai">{msg.text}</div>
+                            <span className="aim-time">{msg.timestamp}</span>
                           </div>
-                          <div className="bg-zinc-800/80 rounded-xl p-2 border border-zinc-700/50">
-                            <span className="text-zinc-400 block text-[10px]">Invoices</span>
-                            <span className="font-extrabold text-white text-xs">
-                              {msg.analytics_data.today_bills_count || 0} Bills
-                            </span>
-                          </div>
-                          <div className="bg-zinc-800/80 rounded-xl p-2 border border-zinc-700/50">
-                            <span className="text-zinc-400 block text-[10px]">Khata Outstanding</span>
-                            <span className="font-extrabold text-amber-300 text-xs">
-                              Rs {msg.analytics_data.khata_outstanding?.toLocaleString() || '0'}
-                            </span>
-                          </div>
-                          <div className="bg-zinc-800/80 rounded-xl p-2 border border-zinc-700/50">
-                            <span className="text-zinc-400 block text-[10px]">Top Product</span>
-                            <span className="font-extrabold text-white text-xs truncate block">
-                              {msg.analytics_data.top_selling_products?.[0]?.name || 'Cotton Latha'}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                        )}
 
-                    {/* 2. 🔥 MARKET & FASHION TRENDS CARD */}
-                    {msg.intent === 'trends' && (
-                      <div className="bg-gradient-to-br from-[#27272a] to-[#232029] border border-amber-800/40 rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
-                          <Flame className="w-3.5 h-3.5 fill-amber-400" />
-                          <span>Textile Market Highlights</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1 text-[10px] text-zinc-300 pt-1">
-                          <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700">
-                            ✨ Pure Boski (Formal)
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700">
-                            🧵 Egyptian Latha
-                          </span>
-                          <span className="px-2 py-0.5 rounded-full bg-zinc-800 border border-zinc-700">
-                            🌸 Digital Printed Lawn
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 3. 📋 CUSTOMER KHATA / LEDGER CARD */}
-                    {msg.ledger_data && msg.ledger_data.customers && msg.ledger_data.customers.length > 0 && (
-                      <div className="bg-[#27272a] border border-zinc-750 rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center justify-between pb-1 border-b border-zinc-700/60">
-                          <span className="font-bold text-xs text-white flex items-center gap-1.5">
-                            <BookOpen className="w-3.5 h-3.5 text-blue-400" />
-                            Customer Ledgers
-                          </span>
-                          <span className="text-[10px] text-zinc-400 font-semibold">
-                            Total Due: Rs {msg.ledger_data.total_due?.toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                          {msg.ledger_data.customers.map((c, i) => (
-                            <div key={i} className="flex items-center justify-between text-[11px] bg-zinc-800/60 p-1.5 rounded-lg">
-                              <div>
-                                <span className="font-bold text-white block">{c.name}</span>
-                                <span className="text-[9px] text-zinc-400">{c.phone || 'No Phone'}</span>
-                              </div>
-                              <span className="font-extrabold text-amber-400 text-xs">
-                                Rs {c.balance?.toLocaleString()}
+                        {/* Analytics */}
+                        {msg.analytics_data && (
+                          <div className="aim-card" style={{ ['--i' as any]: 1 }}>
+                            <div className="aim-card-head">
+                              <span className="aim-card-title">
+                                <TrendingUp className="w-3.5 h-3.5 text-[#3ddc97]" />
+                                Aaj ki performance
+                              </span>
+                              <span className="aim-chip aim-chip-live">
+                                <span className="aim-chip-dot" /> Live
                               </span>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 4. 🖨️ PRINT BILL CARD */}
-                    {msg.print_data && (
-                      <div className="bg-[#27272a] border border-zinc-700 rounded-2xl p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="font-bold text-xs text-white block">
-                              Invoice: {msg.print_data.invoice_number}
-                            </span>
-                            <span className="text-[10px] text-zinc-400">
-                              Total: Rs {msg.print_data.total_amount?.toLocaleString()} • Mode: {msg.print_data.payment_mode}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handlePrintReceipt(msg.print_data)}
-                            className="px-3 py-1.5 bg-white hover:bg-zinc-200 text-black font-bold rounded-full text-xs flex items-center gap-1 cursor-pointer shadow-sm transition"
-                          >
-                            <Printer className="w-3.5 h-3.5" />
-                            <span>Print</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 5. 🔒 ADMIN PIN PROMPT (SECURITY PROTECTED DELETION) */}
-                    {msg.requires_pin && pinPromptMessageId === msg.id && (
-                      <form onSubmit={handlePinSubmit} className="bg-amber-950/40 border border-amber-600/50 rounded-2xl p-3 space-y-2 animate-in fade-in">
-                        <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs">
-                          <Lock className="w-3.5 h-3.5" />
-                          <span>Admin PIN Verification Required</span>
-                        </div>
-                        <p className="text-[11px] text-zinc-300">
-                          Data delete karne ke liye Admin PIN (default: 1234) darj karein:
-                        </p>
-                        <div className="flex gap-2">
-                          <input
-                            type="password"
-                            value={enteredPin}
-                            onChange={(e) => setEnteredPin(e.target.value)}
-                            placeholder="Enter 4-digit PIN"
-                            className="flex-1 bg-black/60 border border-amber-700/60 rounded-xl px-3 py-1 text-xs text-white focus:outline-none focus:border-amber-400"
-                            autoFocus
-                          />
-                          <button
-                            type="submit"
-                            className="px-3 py-1 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs rounded-xl cursor-pointer"
-                          >
-                            Confirm
-                          </button>
-                        </div>
-                      </form>
-                    )}
-
-                    {/* 6. 🛒 REAL PRODUCT CARDS (ONLY WHEN REAL ITEMS ARE MATCHED) */}
-                    {msg.items && msg.items.length > 0 && (
-                      <div className="space-y-2.5 w-full">
-                        {msg.items.map((item, idx) => {
-                          const title = getItemDisplayName(item);
-                          const price = item.unit_price ?? item.price ?? 0;
-                          return (
-                            <div
-                              key={idx}
-                              className="bg-[#27272a] border border-zinc-750/70 rounded-2xl p-3 space-y-2.5 transition hover:border-zinc-600"
-                            >
-                              <div className="flex items-start gap-3">
-                                <div className="w-16 h-16 bg-white rounded-xl p-1 shrink-0 flex items-center justify-center shadow-xs">
-                                  <img
-                                    src="/Screenshot 2026-09-26 210204.svg"
-                                    alt={title}
-                                    className="w-full h-full object-contain"
-                                  />
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="font-bold text-xs text-white truncate">
-                                    {item.quantity > 1 ? `${item.quantity}x ` : ''}{title}
-                                  </h4>
-                                  <p className="text-xs font-bold text-zinc-200 mt-1">
-                                    Rs {price.toLocaleString()}
-                                  </p>
-                                  <p className="text-[10px] text-zinc-400 mt-0.5">
-                                    SKU: {item.sku} • {item.category || 'Fabric'}
-                                  </p>
-                                </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="aim-stat aim-stat-hero col-span-2">
+                                <span className="aim-stat-label">Today&apos;s Sales</span>
+                                <span className="aim-stat-big">
+                                  <CountUp prefix="Rs " value={Number(msg.analytics_data.today_revenue) || 0} />
+                                </span>
                               </div>
+                              <div className="aim-stat">
+                                <span className="aim-stat-label">Invoices</span>
+                                <span className="aim-stat-val">
+                                  <CountUp value={Number(msg.analytics_data.today_bills_count) || 0} /> Bills
+                                </span>
+                              </div>
+                              <div className="aim-stat">
+                                <span className="aim-stat-label">Khata Outstanding</span>
+                                <span className="aim-stat-val text-[#e0b863]">
+                                  <CountUp prefix="Rs " value={Number(msg.analytics_data.khata_outstanding) || 0} />
+                                </span>
+                              </div>
+                              <div className="aim-stat col-span-2">
+                                <span className="aim-stat-label">Top Product</span>
+                                <span className="aim-stat-val truncate block">
+                                  {msg.analytics_data.top_selling_products?.[0]?.name || 'No sales yet'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
-                              <button
-                                onClick={() => handleAddToCart(item)}
-                                className="w-full py-2 bg-white hover:bg-zinc-200 active:scale-98 text-zinc-950 font-bold rounded-full text-xs flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
-                              >
-                                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                                <span>Add to cart</span>
+                        {/* Trends */}
+                        {msg.intent === 'trends' && (
+                          <div className="aim-card aim-card-gold" style={{ ['--i' as any]: 1 }}>
+                            <div className="aim-card-title text-[#e0b863]">
+                              <Flame className="w-3.5 h-3.5 fill-[#e0b863]" />
+                              Textile market highlights
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 pt-2.5">
+                              {['✨ Pure Boski (Formal)', '🧵 Egyptian Latha', '🌸 Digital Printed Lawn'].map((t, i) => (
+                                <span key={t} className="aim-tag" style={{ ['--i' as any]: i + 2 }}>
+                                  {t}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Ledger */}
+                        {msg.ledger_data && msg.ledger_data.customers && msg.ledger_data.customers.length > 0 && (
+                          <div className="aim-card" style={{ ['--i' as any]: 1 }}>
+                            <div className="aim-card-head">
+                              <span className="aim-card-title">
+                                <BookOpen className="w-3.5 h-3.5 text-[#7dd3fc]" />
+                                Customer ledgers
+                              </span>
+                              <span className="aim-chip">Due Rs {msg.ledger_data.total_due?.toLocaleString()}</span>
+                            </div>
+                            <div className="space-y-1.5 max-h-40 overflow-y-auto aim-scroll pr-1">
+                              {msg.ledger_data.customers.map((c, i) => (
+                                <div key={i} className="aim-ledger-row" style={{ ['--i' as any]: i + 2 }}>
+                                  <div className="min-w-0">
+                                    <span className="block font-semibold text-[#f3ecda] text-[12.5px] truncate">{c.name}</span>
+                                    <span className="text-[10.5px] text-[#97ad9f]">{c.phone || 'No Phone'}</span>
+                                  </div>
+                                  <span className="font-extrabold text-[#e0b863] text-[12.5px] shrink-0">
+                                    Rs {c.balance?.toLocaleString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Employee */}
+                        {msg.employee_data && (
+                          <div className="aim-card aim-card-jade" style={{ ['--i' as any]: 1 }}>
+                            <div className="aim-card-head">
+                              <span className="aim-card-title">
+                                <UserCheck className="w-3.5 h-3.5 text-[#3ddc97]" />
+                                Employee registered
+                              </span>
+                              <span className="aim-chip aim-chip-live">Saved</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="block font-bold text-[#f3ecda] text-[13px] truncate">{msg.employee_data.name}</span>
+                                <span className="text-[11px] text-[#97ad9f]">
+                                  {msg.employee_data.job_title} • {msg.employee_data.phone || 'No Phone'}
+                                </span>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-[10.5px] text-[#97ad9f] block">Monthly pay</span>
+                                <span className="font-extrabold text-[#3ddc97] text-[13px]">
+                                  {msg.employee_data.salary && msg.employee_data.salary > 0
+                                    ? `Rs ${msg.employee_data.salary.toLocaleString()}`
+                                    : 'Not specified'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Product saved */}
+                        {msg.product_data && (
+                          <div className="aim-card aim-card-gold" style={{ ['--i' as any]: 1 }}>
+                            <div className="aim-card-head">
+                              <span className="aim-card-title">
+                                <Package className="w-3.5 h-3.5 text-[#e0b863]" />
+                                Catalog item saved
+                              </span>
+                              <span className="aim-chip aim-chip-gold">Ready for sale</span>
+                            </div>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="block font-bold text-[#f3ecda] text-[13px] truncate">{msg.product_data.name}</span>
+                                <span className="text-[11px] text-[#97ad9f]">
+                                  SKU: {msg.product_data.sku} • {msg.product_data.category}
+                                </span>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-[10.5px] text-[#97ad9f] block">Price</span>
+                                <span className="font-extrabold text-[#f3ecda] text-[13px]">
+                                  Rs {msg.product_data.price?.toLocaleString() || '0'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Print bill */}
+                        {msg.print_data && (
+                          <div className="aim-card" style={{ ['--i' as any]: 1 }}>
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="font-bold text-[13px] text-[#f3ecda] block truncate">
+                                  Invoice: {msg.print_data.invoice_number}
+                                </span>
+                                <span className="text-[11px] text-[#97ad9f]">
+                                  Rs {msg.print_data.total_amount?.toLocaleString()} • {msg.print_data.payment_mode}
+                                </span>
+                              </div>
+                              <button onClick={() => handlePrintReceipt(msg.print_data)} className="aim-btn-gold">
+                                <Printer className="w-3.5 h-3.5" />
+                                Print
                               </button>
                             </div>
-                          );
-                        })}
+                          </div>
+                        )}
 
-                        {msg.items.length > 1 && (
-                          <button
-                            onClick={() => handleAddAllToCart(msg.items!)}
-                            className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-white font-semibold rounded-full text-xs flex items-center justify-center gap-1.5 transition cursor-pointer border border-zinc-700"
-                          >
-                            <ShoppingCart className="w-3.5 h-3.5" />
-                            <span>Add all {msg.items.length} items to cart</span>
-                          </button>
+                        {/* PIN prompt */}
+                        {msg.requires_pin && pinPromptMessageId === msg.id && (
+                          <form onSubmit={handlePinSubmit} className="aim-card aim-card-warn space-y-2.5" style={{ ['--i' as any]: 1 }}>
+                            <div className="aim-card-title text-[#fbbf24]">
+                              <Lock className="w-3.5 h-3.5" />
+                              Admin PIN zaroori hai
+                            </div>
+                            <div className="flex gap-2">
+                              <input
+                                type="password"
+                                inputMode="numeric"
+                                value={enteredPin}
+                                onChange={(e) => setEnteredPin(e.target.value)}
+                                placeholder="4-digit PIN"
+                                className="aim-pin-input"
+                                autoFocus
+                              />
+                              <button type="submit" className="aim-btn-gold">
+                                Confirm
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        {/* Product cards */}
+                        {msg.items && msg.items.length > 0 && (
+                          <div className="space-y-2.5">
+                            {msg.items.map((item, i) => {
+                              const title = getItemDisplayName(item);
+                              const price = item.unit_price ?? item.price ?? 0;
+                              return (
+                                <div key={i} className="aim-card aim-product" style={{ ['--i' as any]: i + 1 }}>
+                                  <div className="flex items-center gap-3">
+                                    <ProductThumb alt={title} />
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="font-bold text-[13px] text-[#f3ecda] truncate">
+                                        {item.quantity > 1 ? `${item.quantity}x ` : ''}
+                                        {title}
+                                      </h4>
+                                      <p className="text-[13px] font-extrabold text-[#e0b863] mt-0.5">
+                                        Rs {price.toLocaleString()}
+                                      </p>
+                                      <p className="text-[10.5px] text-[#97ad9f] mt-0.5 truncate">
+                                        SKU: {item.sku} • {item.category || 'Fabric'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <button onClick={() => handleAddToCart(item)} className="aim-btn-gold aim-btn-block mt-3">
+                                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                                    Add to cart
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {msg.items.length > 1 && (
+                              <button onClick={() => handleAddAllToCart(msg.items!)} className="aim-btn-ghost aim-btn-block">
+                                <ShoppingCart className="w-3.5 h-3.5" />
+                                Add all {msg.items.length} items to cart
+                              </button>
+                            )}
+                          </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {/* 💬 Typing Indicator Animation (Bouncing Dots) */}
-            {isProcessing && (
-              <div className="flex items-center gap-2 text-zinc-400 text-xs py-2 px-1 animate-in fade-in">
-                <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center">
-                  <Sparkles className="w-3 h-3 text-emerald-400 animate-spin" />
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-1 bg-[#27272a] px-3 py-1.5 rounded-full">
-                  <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce" />
-                </div>
-              </div>
-            )}
+              );
+            })}
 
-            {/* Quick Suggestion Pills */}
-            <div className="space-y-1.5 pt-1">
-              <p className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider px-1">
-                Suggested Actions
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {quickPills.map((pill, i) => (
+            {/* Welcome quick-action grid */}
+            {showWelcomeGrid && (
+              <div className="grid grid-cols-2 gap-2.5 pt-1">
+                {quickActions.map(({ label, hint, prompt, Icon }, i) => (
                   <button
-                    key={i}
-                    onClick={() => handleSendMessage(pill.prompt)}
-                    className="px-3 py-1.5 rounded-full bg-[#27272a] hover:bg-zinc-700 text-zinc-200 hover:text-white border border-zinc-750 text-xs font-medium transition cursor-pointer text-left hover:scale-102 active:scale-98"
+                    key={label}
+                    onClick={() => handleSendMessage(prompt)}
+                    className="aim-quick"
+                    style={{ ['--i' as any]: i + 2 }}
                   >
-                    {pill.label}
+                    <span className="aim-quick-icon">
+                      <Icon className="w-4 h-4" />
+                    </span>
+                    <span className="block text-left">
+                      <span className="block text-[12.5px] font-bold text-[#f3ecda]">{label}</span>
+                      <span className="block text-[10.5px] text-[#97ad9f]">{hint}</span>
+                    </span>
                   </button>
                 ))}
               </div>
-            </div>
+            )}
+
+            {isProcessing && <ThreadLoader />}
           </div>
 
-          {/* ─── Bottom Message Input Bar ─── */}
-          <div className="p-3 bg-[#1c1c1e] border-t border-zinc-800/70 shrink-0">
-            <div className="relative flex items-center bg-[#27272a] rounded-full px-4 py-1.5 border border-zinc-700/60 focus-within:border-zinc-400 transition-colors">
+          {/* Composer */}
+          <div className="aim-composer shrink-0">
+            {!showWelcomeGrid && (
+              <div className="aim-chips no-scrollbar">
+                {quickActions.map(({ label, prompt, Icon }) => (
+                  <button key={label} onClick={() => handleSendMessage(prompt)} disabled={isProcessing} className="aim-chip-btn">
+                    <Icon className="w-3 h-3" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="aim-input" data-listening={isListening}>
               <input
                 ref={inputRef}
                 type="text"
@@ -677,36 +890,35 @@ export default function AIManagerWidget() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSendMessage();
                 }}
-                placeholder="Message Bilal Cloth AI..."
-                className="w-full bg-transparent text-xs text-white placeholder-zinc-500 focus:outline-none pr-14 py-1.5 font-medium"
+                placeholder={isListening ? 'Sun raha hoon…' : 'Bilal Cloth AI se poochein…'}
               />
 
-              <div className="absolute right-2 flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={toggleSpeech}
-                  className={`p-1.5 rounded-full transition cursor-pointer ${
-                    isListening ? 'bg-rose-500 text-white animate-pulse' : 'text-zinc-400 hover:text-white'
-                  }`}
-                  title={isListening ? 'Listening...' : 'Voice input'}
-                >
-                  {isListening ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
-                </button>
+              <button
+                type="button"
+                onClick={toggleSpeech}
+                className="aim-mic"
+                data-active={isListening}
+                title={isListening ? 'Sun raha hoon…' : 'Voice input'}
+                aria-label="Voice input"
+              >
+                <Mic className="w-4 h-4" />
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => handleSendMessage()}
-                  disabled={!inputMessage.trim() || isProcessing}
-                  className="p-1.5 text-zinc-400 hover:text-white disabled:opacity-30 transition cursor-pointer hover:scale-110 active:scale-90"
-                  title="Send message"
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => handleSendMessage()}
+                disabled={!canSend}
+                className="aim-send"
+                data-ready={canSend}
+                title="Send"
+                aria-label="Send message"
+              >
+                <ArrowUp className="w-4 h-4 stroke-[2.75]" />
+              </button>
             </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }

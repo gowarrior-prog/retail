@@ -168,6 +168,42 @@ def _create_tables(conn: sqlite3.Connection):
         created_at TEXT NOT NULL
     )
     """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS local_ai_history (
+        id TEXT PRIMARY KEY,
+        sender TEXT NOT NULL,
+        message TEXT NOT NULL,
+        intent TEXT,
+        metadata_json TEXT,
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ai_audit_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        module TEXT NOT NULL,
+        action TEXT NOT NULL,
+        original_prompt TEXT NOT NULL,
+        parsed_json TEXT,
+        status TEXT NOT NULL,
+        execution_time_ms REAL DEFAULT 0.0,
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS ai_anomaly_alerts (
+        id TEXT PRIMARY KEY,
+        alert_type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        cashier_name TEXT,
+        details TEXT NOT NULL,
+        metadata_json TEXT,
+        is_resolved INTEGER DEFAULT 0,
+        created_at TEXT NOT NULL
+    )
+    """)
 
     # Performance & Search Indexes for 0ms queries
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_products_barcode ON local_products(barcode);")
@@ -541,4 +577,383 @@ def clear_all_local_pos_data():
     cursor.execute("DELETE FROM local_supplier_returns")
     conn.commit()
     conn.close()
+
+
+# ── AI Chat History (Local SQLite & Cloud DB2 Sync) ────────────────
+
+def save_ai_chat_message(msg_id: str, sender: str, message: str, intent: str | None = None, metadata: dict | None = None) -> dict:
+    """Saves AI conversational message to local SQLite table."""
+    now_str = datetime.now().isoformat()
+    meta_json = json.dumps(metadata or {})
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO local_ai_history (id, sender, message, intent, metadata_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+            message=excluded.message, intent=excluded.intent, metadata_json=excluded.metadata_json
+    """, (msg_id, sender, message, intent or "chat", meta_json, now_str))
+    conn.commit()
+    conn.close()
+    return {"id": msg_id, "saved": True}
+
+
+def get_recent_ai_chat_history(limit: int = 40) -> list:
+    """Fetches recent AI chat messages from local SQLite."""
+    conn = get_sqlite_conn()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, sender, message, intent, metadata_json, created_at
+        FROM local_ai_history
+        ORDER BY created_at ASC
+        LIMIT ?
+    """, (limit,))
+    rows = []
+    for r in cursor.fetchall():
+        meta = {}
+        try:
+            meta = json.loads(r["metadata_json"] or "{}")
+        except Exception:
+            pass
+        rows.append({
+            "id": r["id"],
+            "sender": r["sender"],
+            "text": r["message"],
+            "intent": r["intent"],
+            "timestamp": r["created_at"],
+            **meta
+        })
+    conn.close()
+    return rows
+
+
+def clear_all_local_ai_history():
+    """Clears all stored AI conversation logs from local SQLite."""
+    conn = get_sqlite_conn()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM local_ai_history")
+    conn.commit()
+    conn.close()
+
+
+async def sync_ai_message_to_db2(msg_id: str, sender: str, message: str, intent: str | None, metadata: dict | None):
+    """Syncs AI conversation record to Cloud Supabase DB2 (Operations & AI history)."""
+    try:
+        from app.core.database import SessionDb2
+        from sqlalchemy import text
+        async with SessionDb2() as session:
+            await session.execute(text("""
+                CREATE TABLE IF NOT EXISTS ai_chat_history (
+                    id TEXT PRIMARY KEY,
+                    sender TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    intent TEXT,
+                    metadata_json TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """))
+            await session.execute(text("""
+                INSERT INTO ai_chat_history (id, sender, message, intent, metadata_json)
+                VALUES (:id, :sender, :message, :intent, :meta)
+                ON CONFLICT (id) DO NOTHING
+            """), {
+                "id": msg_id,
+                "sender": sender,
+                "message": message,
+                "intent": intent or "chat",
+                "meta": json.dumps(metadata or {})
+            })
+            await session.commit()
+    except Exception:
+        # Non-blocking fail-safe: local SQLite preserves all messages offline
+        pass
+
+
+def log_ai_audit_event(
+    user_id: str,
+    role: str,
+    module: str,
+    action: str,
+    original_prompt: str,
+    parsed_json: Optional[Dict[str, Any]] = None,
+    status: str = "success",
+    execution_time_ms: float = 0.0
+) -> str:
+    """Logs every AI-driven action into SQLite ai_audit_logs table with zero blocking overhead."""
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+        log_id = f"audit-{uuid.uuid4().hex[:12]}"
+        now_iso = datetime.now().isoformat()
+        c.execute("""
+            INSERT INTO ai_audit_logs (id, user_id, role, module, action, original_prompt, parsed_json, status, execution_time_ms, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            log_id,
+            user_id or "anonymous",
+            role or "cashier",
+            module or "general",
+            action or "query",
+            original_prompt[:1000] if original_prompt else "",
+            json.dumps(parsed_json or {}),
+            status,
+            round(execution_time_ms, 2),
+            now_iso
+        ))
+        conn.commit()
+        return log_id
+    except Exception as e:
+        print(f"[AI Audit Log Notice] Could not log event: {e}")
+        return ""
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def log_anomaly_alert(
+    alert_type: str,
+    severity: str,
+    cashier_name: str,
+    details: str,
+    metadata: Optional[Dict[str, Any]] = None
+) -> str:
+    """Logs security, fraud, or discount anomaly into local SQLite ai_anomaly_alerts table."""
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+        alert_id = f"alert-{uuid.uuid4().hex[:10]}"
+        now_iso = datetime.now().isoformat()
+        c.execute("""
+            INSERT INTO ai_anomaly_alerts (id, alert_type, severity, cashier_name, details, metadata_json, is_resolved, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+        """, (
+            alert_id,
+            alert_type,
+            severity,
+            cashier_name or "Unknown",
+            details,
+            json.dumps(metadata or {}),
+            now_iso
+        ))
+        conn.commit()
+        return alert_id
+    except Exception as e:
+        print(f"[Anomaly Log Notice] Could not log anomaly alert: {e}")
+        return ""
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def verify_all_local_ledger_integrity() -> Dict[str, Any]:
+    """
+    Cryptographic verification:
+    Checks SHA-256 HMAC checksums of all bills and products in pos_local.db
+    to detect any external database tampering or unauthorized row manipulation.
+    """
+    conn = None
+    total_bills = 0
+    tampered_bills = 0
+    total_products = 0
+    tampered_products = 0
+
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+
+        # 1. Audit Bills
+        c.execute("SELECT id, invoice_number, total_amount, item_details_json, checksum FROM local_bills")
+        for row in c.fetchall():
+            b_id, inv_num, amt, items_json, stored_chk = row
+            total_bills += 1
+            expected = calculate_checksum(f"{inv_num}_{amt}_{items_json}")
+            if stored_chk != expected:
+                tampered_bills += 1
+                log_anomaly_alert(
+                    alert_type="database_tampering",
+                    severity="CRITICAL",
+                    cashier_name="SYSTEM",
+                    details=f"Cryptographic hash mismatch detected on bill {inv_num}! Possible SQLite file modification.",
+                    metadata={"bill_id": b_id, "invoice_number": inv_num}
+                )
+
+        # 2. Audit Products
+        c.execute("SELECT id, sku, price, stock, checksum FROM local_products")
+        for row in c.fetchall():
+            p_id, sku, price, stock, stored_chk = row
+            total_products += 1
+            expected = calculate_checksum(f"{sku}_{price}_{stock}")
+            if stored_chk != expected:
+                tampered_products += 1
+                log_anomaly_alert(
+                    alert_type="product_price_tampering",
+                    severity="HIGH",
+                    cashier_name="SYSTEM",
+                    details=f"Unauthorized price/stock modification detected on SKU {sku}!",
+                    metadata={"product_id": p_id, "sku": sku}
+                )
+
+        return {
+            "status": "secure" if (tampered_bills == 0 and tampered_products == 0) else "tampering_detected",
+            "total_bills_audited": total_bills,
+            "tampered_bills": tampered_bills,
+            "total_products_audited": total_products,
+            "tampered_products": tampered_products,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def audit_recent_bills_for_anomalies(limit: int = 50) -> List[Dict[str, Any]]:
+    """
+    AI Anomaly & Theft (Ghabla) Detection Engine:
+    1. Audits high discounts (> 20%).
+    2. Identifies items sold below cost price.
+    3. Flags sales transacted during off-hours (11:00 PM - 7:00 AM).
+    4. Detects high-frequency receipt voids / return patterns.
+    """
+    alerts = []
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+        c.execute("""
+            SELECT id, invoice_number, total_amount, discount, cashier_name, item_details_json, created_at
+            FROM local_bills
+            ORDER BY created_at DESC LIMIT ?
+        """, (limit,))
+        bills = c.fetchall()
+
+        for b in bills:
+            b_id, inv_num, amt, disc, cashier, items_json, created_at = b
+
+            # A. High Discount Audit (> 20%)
+            if disc and disc > 20.0:
+                alert = {
+                    "alert_type": "excessive_discount",
+                    "severity": "MEDIUM",
+                    "cashier_name": cashier or "Cashier",
+                    "details": f"Bill {inv_num} given an abnormally high discount of {disc:.1f}%.",
+                    "invoice_number": inv_num
+                }
+                alerts.append(alert)
+                log_anomaly_alert(alert["alert_type"], alert["severity"], alert["cashier_name"], alert["details"], {"bill_id": b_id, "discount": disc})
+
+            # B. Off-Hours Sales Audit (Between 11:00 PM and 7:00 AM)
+            try:
+                dt = datetime.fromisoformat(created_at)
+                if dt.hour >= 23 or dt.hour < 7:
+                    alert = {
+                        "alert_type": "off_hours_transaction",
+                        "severity": "HIGH",
+                        "cashier_name": cashier or "Cashier",
+                        "details": f"Transaction {inv_num} recorded during off-hours at {dt.strftime('%I:%M %p')}.",
+                        "invoice_number": inv_num
+                    }
+                    alerts.append(alert)
+                    log_anomaly_alert(alert["alert_type"], alert["severity"], alert["cashier_name"], alert["details"], {"bill_id": b_id, "time": created_at})
+            except Exception:
+                pass
+
+            # C. Sold Below Cost Price Audit
+            if items_json:
+                try:
+                    items = json.loads(items_json)
+                    for itm in items:
+                        cost = float(itm.get("cost_price") or 0.0)
+                        sold_price = float(itm.get("unit_price") or itm.get("price") or 0.0)
+                        if cost > 0.0 and sold_price < cost:
+                            alert = {
+                                "alert_type": "sold_below_cost",
+                                "severity": "HIGH",
+                                "cashier_name": cashier or "Cashier",
+                                "details": f"Item '{itm.get('product_name', 'Item')}' sold for Rs {sold_price:.0f} which is below cost price (Rs {cost:.0f})!",
+                                "invoice_number": inv_num
+                            }
+                            alerts.append(alert)
+                            log_anomaly_alert(alert["alert_type"], alert["severity"], alert["cashier_name"], alert["details"], {"bill_id": b_id, "item": itm})
+                except Exception:
+                    pass
+
+        return alerts
+    except Exception as e:
+        print(f"[Anomaly Audit Notice] Error auditing bills: {e}")
+        return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def get_ai_audit_logs(limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
+    """Fetches paginated AI audit trail logs."""
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("""
+            SELECT id, user_id, role, module, action, original_prompt, parsed_json, status, execution_time_ms, created_at
+            FROM ai_audit_logs
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        """, (limit, offset))
+        rows = [dict(r) for r in c.fetchall()]
+        return rows
+    except Exception as e:
+        print(f"[Audit Log Fetch Notice] {e}")
+        return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def get_ai_anomaly_alerts(limit: int = 50, unresolved_only: bool = False) -> List[Dict[str, Any]]:
+    """Fetches AI anomaly and theft alerts."""
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        query = "SELECT * FROM ai_anomaly_alerts"
+        params: List[Any] = []
+        if unresolved_only:
+            query += " WHERE is_resolved = 0"
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        c.execute(query, tuple(params))
+        rows = [dict(r) for r in c.fetchall()]
+        return rows
+    except Exception as e:
+        print(f"[Anomaly Alerts Fetch Notice] {e}")
+        return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
 

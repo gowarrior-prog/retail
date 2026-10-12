@@ -58,7 +58,7 @@ export interface AIStatusResponse {
 export interface AIChatResult {
   status: string;
   engine: 'gemini_cloud' | 'offline_nlp' | 'offline_rules';
-  intent: 'chat' | 'analytics' | 'trends' | 'order' | 'ledger' | 'print' | 'delete';
+  intent: 'chat' | 'analytics' | 'trends' | 'order' | 'ledger' | 'print' | 'delete' | 'add_khata' | 'add_product' | 'add_employee' | 'add_purchase';
   reply_text: string;
   language: 'english' | 'roman_urdu' | 'urdu';
   items: NLOrderItem[];
@@ -76,6 +76,29 @@ export interface AIChatResult {
     customers: Array<{ id: string; name: string; phone: string; balance: number; updated_at: string }>;
     total_due: number;
     count: number;
+  };
+  product_data?: {
+    id: string;
+    name: string;
+    price: number;
+    category: string;
+    sku: string;
+  };
+  employee_data?: {
+    id: string;
+    name: string;
+    phone: string;
+    job_title: string;
+    salary: number;
+  };
+  purchase_data?: {
+    id: string;
+    supplier_name: string;
+    item_name: string;
+    quantity: number;
+    total_cost: number;
+    paid_amount: number;
+    remaining: number;
   };
   print_data?: {
     id: string;
@@ -98,7 +121,9 @@ export interface AIChatResult {
 export async function chatWithAI(
   message: string,
   history: Array<{ sender: string; text: string }> = [],
-  adminPin?: string
+  adminPin?: string,
+  userRole: string = 'cashier',
+  userId: string = 'user-1'
 ): Promise<AIChatResult> {
   try {
     return await apiFetch<AIChatResult>('/ai/chat', {
@@ -107,6 +132,8 @@ export async function chatWithAI(
         message,
         history,
         admin_pin: adminPin || undefined,
+        user_role: userRole,
+        user_id: userId,
       }),
       timeoutMs: 25000,
     });
@@ -114,15 +141,30 @@ export async function chatWithAI(
     // Offline emergency fallback without generating fake products
     const lower = message.toLowerCase();
     const isEnglish = /\b(hi|hello|analytics|sales|trends|delete|how)\b/.test(lower);
-    
+    let fallbackReply = isEnglish
+      ? "I am currently running in local offline mode. I can still assist with local orders, catalog searches, and receipts."
+      : "Main is waqt local offline mode mein hoon. Aap local orders aur billing ba-asani chala sakte hain.";
+
+    if (/\b(kia\s+haal|kaise\s+ho|how\s+are\s+you)\b/.test(lower)) {
+      fallbackReply = isEnglish
+        ? "I am doing great, thank you! Local store system is fully active."
+        : "Alhamdulillah, main bilkul theek hoon! Local system active hai.";
+    } else if (/\b(salam|assalam|aoa)\b/.test(lower)) {
+      fallbackReply = isEnglish
+        ? "Hello! Local store assistant is ready."
+        : "Walaikum Assalam! Main Bilal Cloth ka AI Assistant hoon.";
+    } else if (/\b(aap\s+ka\s+naam|who\s+are\s+you|tum\s+kaun\s+ho)\b/.test(lower)) {
+      fallbackReply = isEnglish
+        ? "I am the Bilal Cloth AI Manager, running in high-speed local mode."
+        : "Mera naam Bilal Cloth AI Manager hai.";
+    }
+
     return {
       status: 'offline_client_fallback',
       engine: 'offline_nlp',
       intent: 'chat',
       language: isEnglish ? 'english' : 'roman_urdu',
-      reply_text: isEnglish
-        ? "I am currently in local offline mode. I can still assist with local orders, catalog searches, and receipts."
-        : "Main is waqt local offline mode mein hoon. Aap local orders aur billing ba-asani chala sakte hain.",
+      reply_text: fallbackReply,
       items: [], // Never generate fake products on chat!
       requires_pin: false,
     };

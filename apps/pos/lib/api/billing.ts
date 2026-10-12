@@ -189,3 +189,10 @@ export async function deleteSupplierReturn(id: string): Promise<any> {
     return await apiFetch<any>(`/returns/supplier/${encodeURIComponent(id)}`, { method: 'DELETE' });
   }
 }
+
+export async function updateSupplierName(oldName: string, newName: string): Promise<any> {
+  return await apiFetch<any>('/purchases/supplier', {
+    method: 'PUT',
+    body: JSON.stringify({ old_name: oldName, new_name: newName }),
+  });
+}

@@ -83,6 +83,13 @@ export default function EmployeesPage() {
       if (empList[0]?.id) setSelectedId(empList[0].id);
     }
     initData();
+
+    window.addEventListener('employee-updated', initData);
+    window.addEventListener('pos-data-updated', initData);
+    return () => {
+      window.removeEventListener('employee-updated', initData);
+      window.removeEventListener('pos-data-updated', initData);
+    };
   }, []);
 
   // Filtered Employees list

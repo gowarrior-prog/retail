@@ -7,17 +7,43 @@ RATE_LIMIT_MAX_REQUESTS = 30
 RATE_LIMIT_WINDOW_SECONDS = 60
 _request_records: Dict[str, List[float]] = {}
 
-# Prompt injection & jailbreak detection patterns
+# Prompt injection, jailbreak, prompt leakage, and exploit detection patterns
 JAILBREAK_PATTERNS = [
-    re.compile(r"ignore\s+(all\s+)?(previous|prior)\s+instructions?", re.IGNORECASE),
-    re.compile(r"you\s+are\s+now\s+(in|a|the)", re.IGNORECASE),
+    # 1. Instruction Hijacking & Roleplay Bypasses
+    re.compile(r"ignore\s+(all\s+)?(previous|prior|above|system)\s+instructions?", re.IGNORECASE),
+    re.compile(r"disregard\s+(all\s+)?(previous|prior|earlier)\s+(prompts?|instructions?|rules?)", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\s+(in|a|the|DAN|unrestricted|god\s*mode|an\s+unfiltered)", re.IGNORECASE),
+    re.compile(r"jailbreak", re.IGNORECASE),
     re.compile(r"system\s*:\s*", re.IGNORECASE),
     re.compile(r"<\|im_start\|>", re.IGNORECASE),
+    re.compile(r"<\|im_end\|>", re.IGNORECASE),
     re.compile(r"\[INST\]", re.IGNORECASE),
-    re.compile(r"set\s+price\s+to\s+0", re.IGNORECASE),
-    re.compile(r"free\s+order", re.IGNORECASE),
-    re.compile(r"delete\s+from", re.IGNORECASE),
-    re.compile(r"drop\s+table", re.IGNORECASE),
+    re.compile(r"\[/INST\]", re.IGNORECASE),
+    re.compile(r"<\s*s\s*>", re.IGNORECASE),
+    re.compile(r"<\s*/s\s*>", re.IGNORECASE),
+
+    # 2. System Prompt & Secrets Leakage Attacks
+    re.compile(r"(repeat|output|show|print|reveal|tell\s+me|expose|leak|what\s+is)\s+(your\s+)?(system\s+prompt|initial\s+instructions?|system\s+instructions?|developer\s+mode|internal\s+rules)", re.IGNORECASE),
+    re.compile(r"(api[_-]?key|secret[_-]?key|password|gemini[_-]?api[_-]?key|admin[_-]?pin|env\s+variables?)", re.IGNORECASE),
+
+    # 3. Adversarial Billing, Price Overrides & Discount Fraud
+    re.compile(r"(set|make|force|change|update)\s+(the\s+)?(price|total|cost|rate)\s+(to|=)\s*(0|zero|free|null)", re.IGNORECASE),
+    re.compile(r"free\s+(order|item|cloth|suit|bill|cart)", re.IGNORECASE),
+    re.compile(r"(apply|give|add)\s+100%\s+discount", re.IGNORECASE),
+    re.compile(r"discount\s*[:=]?\s*100%", re.IGNORECASE),
+    re.compile(r"price\s*[:=]?\s*0\s*(pkr|rs|rupees)?", re.IGNORECASE),
+
+    # 4. SQL Injection & Database Tampering Signatures
+    re.compile(r"(union\s+select|insert\s+into|delete\s+from|drop\s+table|update\s+\w+\s+set|alter\s+table|exec\s*\(|execute\s*\()", re.IGNORECASE),
+    re.compile(r"['\"];\s*(drop|delete|insert|update|alter)", re.IGNORECASE),
+    re.compile(r"--\s*$", re.IGNORECASE),
+    re.compile(r"/\*.*?\*/", re.IGNORECASE),
+
+    # 5. XSS & Script Injections
+    re.compile(r"<\s*script[^>]*>", re.IGNORECASE),
+    re.compile(r"javascript\s*:", re.IGNORECASE),
+    re.compile(r"onerror\s*=", re.IGNORECASE),
+    re.compile(r"onload\s*=", re.IGNORECASE),
 ]
 
 
@@ -36,26 +62,28 @@ def check_rate_limit(client_ip: str) -> bool:
 
 def sanitize_and_neutralize_input(text: str) -> Tuple[str, bool]:
     """
-    Sanitizes raw text, strips control characters, and detects jailbreak/prompt injection attempts.
+    Sanitizes raw text, strips control characters, HTML tags, and detects jailbreak/prompt injection attempts.
     Returns: (cleaned_text, is_injection_detected)
     """
     if not text:
         return "", False
 
-    # 1. Strip control characters
+    # 1. Strip ASCII and Unicode control characters (except newline and tab)
     cleaned = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
-    
-    # 2. Check for jailbreak patterns
+
+    # 2. Check for adversarial injection patterns
     is_injection = False
     for pattern in JAILBREAK_PATTERNS:
         if pattern.search(cleaned):
             is_injection = True
-            # Neutralize matched pattern
-            cleaned = pattern.sub("[FILTERED_INPUT]", cleaned)
+            cleaned = pattern.sub("[SANITIZED_ADVERSARIAL_INPUT]", cleaned)
 
-    # 3. Strip code fence injections
+    # 3. Strip code fence and markup tags
     cleaned = cleaned.replace("```", " ").replace("<", " ").replace(">", " ")
-    return cleaned.strip(), is_injection
+    
+    # 4. Collapse repeated whitespaces
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    return cleaned, is_injection
 
 
 def enforce_catalog_prices(parsed_items: List[Dict[str, Any]], catalog: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

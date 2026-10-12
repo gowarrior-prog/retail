@@ -399,6 +399,43 @@ async def delete_shop_purchase_post(req: DeletePurchaseRequest, db: AsyncSession
     return await delete_shop_purchase(req.id, db)
 
 
+class UpdateSupplierNameRequest(BaseModel):
+    old_name: str
+    new_name: str
+
+@router.put("/purchases/supplier")
+async def update_supplier_name_endpoint(req: UpdateSupplierNameRequest, db: AsyncSession = Depends(get_db3)):
+    old_clean = req.old_name.strip()
+    new_clean = req.new_name.strip()
+    if not new_clean:
+        raise HTTPException(status_code=400, detail="New supplier name cannot be empty")
+    
+    # 1. Update in local SQLite
+    from app.services.sqlite_sync_service import get_sqlite_conn
+    conn = get_sqlite_conn()
+    c = conn.cursor()
+    c.execute("UPDATE local_purchases SET supplier_name = ? WHERE LOWER(supplier_name) = LOWER(?)", (new_clean, old_clean))
+    conn.commit()
+    conn.close()
+
+    # 2. Update in DB3
+    if db is not None:
+        try:
+            from sqlalchemy import func
+            res = await db.execute(select(ShopPurchaseModel).filter(func.lower(ShopPurchaseModel.supplier_name) == old_clean.lower()))
+            rows = res.scalars().all()
+            for r in rows:
+                r.supplier_name = new_clean
+            if rows:
+                await db.commit()
+        except Exception:
+            pass
+            
+    invalidate_purchase_cache()
+    return {"status": "success", "old_name": old_clean, "new_name": new_clean, "message": f"Supplier '{old_clean}' updated to '{new_clean}' successfully!"}
+
+
+
 @router.get("/billing-history/{invoice_number}")
 async def get_invoice_by_number(invoice_number: str, db: AsyncSession = Depends(get_db3)):
     if db is not None:
