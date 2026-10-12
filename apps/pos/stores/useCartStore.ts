@@ -48,7 +48,8 @@ interface CartState {
   itemCount: () => number;
   // Actions
   setItems: (items: CartItem[]) => void;
-  addItem: (product: any) => void;
+  addItem: (product: any, customQty?: number) => void;
+  addMultipleItems: (items: any[]) => void;
   removeItem: (id: string) => void;
   updateQuantity: (id: string, qty: number) => void;
   updatePrice: (id: string, price: number) => void;
@@ -125,16 +126,13 @@ export const useCartStore = create<CartState>((set, get) => ({
 
   setItems: (items: CartItem[]) => set({ items }),
 
-  addItem: (product: any) => set((state: CartState) => {
-    const stockQty = product.stock ?? product.quantity ?? 0;
-    if (stockQty <= 0) {
-      return state;
-    }
+  addItem: (product: any, customQty: number = 1) => set((state: CartState) => {
+    const qtyToAdd = Math.max(1, customQty);
     const existing = state.items.find(i => i.id === product.id);
     if (existing) {
       return {
         items: state.items.map(i =>
-          i.id === product.id ? { ...i, quantity: i.quantity + 1 } : i
+          i.id === product.id ? { ...i, quantity: i.quantity + qtyToAdd } : i
         ),
       };
     }
@@ -144,13 +142,49 @@ export const useCartStore = create<CartState>((set, get) => ({
         name: sanitizeText(product.name || 'Unnamed Item'),
         price: product.price || 0,
         cost_price: product.cost_price || 0,
-        quantity: 1,
+        quantity: qtyToAdd,
         image_url: sanitizeUrl(product.image_url),
         sku: sanitizeBarcode(product.barcode || product.sku || (product.id ? product.id.slice(0, 8) : 'SKU-NEW')),
         category: sanitizeText(product.category || 'General'),
         discount: 0,
       }],
     };
+  }),
+
+  addMultipleItems: (newItems: any[]) => set((state: CartState) => {
+    let currentItems: CartItem[] = [...state.items];
+    for (const item of newItems) {
+      const p = item.product || item;
+      const qty = Math.max(1, item.quantity || p.quantity || 1);
+      const existingIdx = currentItems.findIndex(i => i.id === p.id || (p.sku && i.sku === p.sku));
+      const existing = existingIdx >= 0 ? currentItems[existingIdx] : undefined;
+      if (existing) {
+        currentItems[existingIdx] = {
+          id: existing.id,
+          name: existing.name,
+          price: existing.price,
+          cost_price: existing.cost_price,
+          quantity: existing.quantity + qty,
+          image_url: existing.image_url,
+          sku: existing.sku,
+          category: existing.category,
+          discount: existing.discount,
+        };
+      } else {
+        currentItems.push({
+          id: String(p.id || `item-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`),
+          name: sanitizeText(p.name || 'Fabric Item'),
+          price: Number(p.price || 0),
+          cost_price: Number(p.cost_price || 0),
+          quantity: qty,
+          image_url: sanitizeUrl(p.image_url),
+          sku: sanitizeBarcode(p.barcode || p.sku || 'SKU-NL'),
+          category: sanitizeText(p.category || 'General'),
+          discount: 0,
+        });
+      }
+    }
+    return { items: currentItems };
   }),
 
   removeItem: (id: string) => set((state: CartState) => ({

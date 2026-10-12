@@ -3,6 +3,7 @@ import './globals.css';
 import SidebarWrapper from '@/components/layout/SidebarWrapper';
 import MainContentLayout from '@/components/layout/MainContentLayout';
 import AntiTamperGuard from '@/components/security/AntiTamperGuard';
+import AIManagerWidget from '@/components/ai/AIManagerWidget';
 
 export const metadata: Metadata = {
   title: 'BILAL CLOTH HOUSE — Modern Retail POS v17',
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SidebarWrapper />
         <MainContentLayout>{children}</MainContentLayout>
         <AntiTamperGuard />
+        <AIManagerWidget />
       </body>
     </html>
   );

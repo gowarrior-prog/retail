@@ -3,6 +3,7 @@ export * from './api/products';
 export * from './api/employees';
 export * from './api/billing';
 export * from './api/odoo';
+export * from './api/ai';
 
 // Security Policy: No client-side data storage — all data comes from backend SQL only
 export function getLocalProductCache(): any[] { return []; }
