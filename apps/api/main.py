@@ -141,6 +141,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+from app.core.sanitizer import SanitizeInputMiddleware
+
+# Perimeter Input Sanitization & Injection Defense Middleware
+app.add_middleware(SanitizeInputMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -165,7 +170,29 @@ async def root():
         "status": "online",
         "message": "Multi-Database Modular System API is active across DB1, DB2, and DB3!",
         "server": "Bilal Cloth POS Main Shop Server",
+        "security": "SQLCipher AES-256 + HMAC-SHA256 Anti-Tamper Enabled",
     }
+
+@app.get("/api/security/audit-logs")
+async def get_system_audit_logs(limit: int = 50):
+    """Fetches recent entries from the unalterable system audit log."""
+    from app.services.sqlite_sync_service import get_recent_system_audit_logs
+    return {
+        "status": "success",
+        "logs": get_recent_system_audit_logs(limit)
+    }
+
+@app.get("/api/security/verify-audit-chain")
+async def verify_audit_chain():
+    """Cryptographically verifies that the audit log chain is intact and uncorrupted."""
+    from app.services.sqlite_sync_service import verify_system_audit_log_chain
+    return verify_system_audit_log_chain()
+
+@app.get("/api/security/verify-ledger")
+async def verify_ledger():
+    """Verifies SHA-256 cryptographic checksums across all financial ledgers (bills, products, khata, purchases)."""
+    from app.services.sqlite_sync_service import verify_all_local_ledger_integrity
+    return verify_all_local_ledger_integrity()
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

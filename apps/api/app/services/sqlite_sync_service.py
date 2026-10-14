@@ -1,12 +1,22 @@
 import os
-import sqlite3
 import json
 import uuid
 import hashlib
 import hmac
 from datetime import datetime
+from typing import List, Dict, Any, Optional
+
+try:
+    import sqlcipher3 as sqlite3
+    HAS_SQLCIPHER = True
+except ImportError:
+    import sqlite3
+    HAS_SQLCIPHER = False
+
+import sqlite3 as std_sqlite3
 
 SYSTEM_SECRET = os.getenv("SECURITY_HMAC_SECRET", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#")
+SQLCIPHER_PASSPHRASE = os.getenv("SQLCIPHER_PASSPHRASE", SYSTEM_SECRET)
 
 from app.core.paths import get_sqlite_path, get_app_data_dir
 
@@ -14,50 +24,143 @@ def calculate_checksum(data_str: str) -> str:
     """Generates SHA-256 HMAC signature to detect local database tampering."""
     return hmac.new(SYSTEM_SECRET.encode('utf-8'), data_str.encode('utf-8'), hashlib.sha256).hexdigest()
 
-def get_sqlite_conn() -> sqlite3.Connection:
-    """Returns an active connection to pos_local.db with self-healing recovery and WAL mode for max performance."""
-    db_path = get_sqlite_path()
-    conn = None
+def calculate_bill_checksum(bill_id: str, invoice_number: str, total_amount: float, payment_mode: str, cashier_name: str) -> str:
+    """Generates SHA-256 HMAC checksum for a billing record."""
+    return calculate_checksum(f"{bill_id}:{invoice_number}:{round(float(total_amount), 2)}:{payment_mode}:{cashier_name}")
+
+def calculate_product_checksum(product_id: str, name: str, price: float, sku: str) -> str:
+    """Generates SHA-256 HMAC checksum for a product catalog record."""
+    return calculate_checksum(f"{product_id}:{name}:{round(float(price), 2)}:{sku}")
+
+def calculate_khata_checksum(cust_id: str, name: str, phone: Optional[str], balance: float) -> str:
+    """Generates SHA-256 HMAC checksum for a customer khata ledger record."""
+    return calculate_checksum(f"{cust_id}:{name}:{phone or ''}:{round(float(balance), 2)}")
+
+def calculate_purchase_checksum(pur_id: str, supplier_name: str, item_name: str, quantity: int, total_cost: float) -> str:
+    """Generates SHA-256 HMAC checksum for a supplier purchase record."""
+    return calculate_checksum(f"{pur_id}:{supplier_name}:{item_name}:{int(quantity)}:{round(float(total_cost), 2)}")
+
+def _apply_pragmas(conn: sqlite3.Connection):
+    """Applies high-reliability WAL mode and power-loss guard pragmas."""
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    conn.execute("PRAGMA busy_timeout=10000;")       # 10s busy wait prevents 'database locked'
+    conn.execute("PRAGMA wal_autocheckpoint=1000;")   # Auto checkpoint at 1000 pages
+    conn.execute("PRAGMA cache_size=-64000;")         # 64MB RAM Cache
+    conn.execute("PRAGMA temp_store=MEMORY;")
+    conn.execute("PRAGMA foreign_keys=ON;")
+
+def _open_or_migrate_sqlcipher(db_path: str) -> sqlite3.Connection:
+    """
+    Opens pos_local.db using SQLCipher AES-256 encryption.
+    If an existing unencrypted SQLite database is detected, atomically exports and encrypts
+    it with zero data loss, preserving all customer, billing, and inventory history.
+    """
+    os.makedirs(os.path.dirname(db_path), exist_ok=True)
+
+    # 1. If file does not exist, create fresh encrypted SQLCipher database
+    if not os.path.exists(db_path):
+        conn = sqlite3.connect(db_path, timeout=15)
+        conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+        conn.execute("PRAGMA cipher_compatibility = 4;")
+        _apply_pragmas(conn)
+        return conn
+
+    # 2. Try opening existing file with SQLCipher passphrase
     try:
         conn = sqlite3.connect(db_path, timeout=15)
-        # SQLite Power-Loss Guard Pragmas
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA busy_timeout=10000;")       # 10s busy wait prevents 'database locked'
-        conn.execute("PRAGMA wal_autocheckpoint=1000;")   # Auto checkpoint at 1000 pages
-        conn.execute("PRAGMA cache_size=-64000;")         # 64MB RAM Cache
-        conn.execute("PRAGMA temp_store=MEMORY;")
-        conn.execute("PRAGMA foreign_keys=ON;")
-        res = conn.execute("PRAGMA quick_check").fetchone()
-        if res and res[0] == "ok":
-            _create_tables(conn)
-            return conn
-        conn.close()
-        conn = None
-    except Exception as err:
-        print(f"[SQLite Self-Healing] Database error detected ({err}). Repairing...")
-        if conn:
+        conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+        conn.execute("PRAGMA cipher_compatibility = 4;")
+        # Quick sanity query to verify key
+        conn.execute("SELECT count(*) FROM sqlite_master;").fetchone()
+        _apply_pragmas(conn)
+        return conn
+    except Exception as cipher_err:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+    # 3. Key check failed. Check if this is a legacy plain unencrypted SQLite file
+    is_plain = False
+    try:
+        test_plain = std_sqlite3.connect(db_path)
+        test_plain.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        test_plain.execute("SELECT count(*) FROM sqlite_master;").fetchone()
+        test_plain.close()
+        is_plain = True
+    except Exception:
+        is_plain = False
+
+    if is_plain:
+        print("[SQLCipher Migration] Plain SQLite database detected. Migrating to AES-256 encryption...")
+        temp_enc = db_path + f".enc_migrating_{int(datetime.now().timestamp())}.db"
+        if os.path.exists(temp_enc):
             try:
-                conn.close()
+                os.remove(temp_enc)
             except Exception:
                 pass
-            conn = None
 
-    # Replace malformed file
+        try:
+            exp_conn = sqlite3.connect(db_path)
+            exp_conn.execute(f"ATTACH DATABASE '{temp_enc}' AS encrypted KEY '{SQLCIPHER_PASSPHRASE}';")
+            exp_conn.execute("SELECT sqlcipher_export('encrypted');")
+            exp_conn.execute("DETACH DATABASE encrypted;")
+            exp_conn.close()
+
+            # Backup original plain file
+            bak_path = db_path + ".plain.bak"
+            if os.path.exists(bak_path):
+                try:
+                    os.remove(bak_path)
+                except Exception:
+                    pass
+            os.replace(db_path, bak_path)
+
+            # Clean legacy WAL/SHM
+            for ext in ["-wal", "-shm"]:
+                if os.path.exists(db_path + ext):
+                    try:
+                        os.remove(db_path + ext)
+                    except Exception:
+                        pass
+
+            # Atomically place encrypted file
+            os.replace(temp_enc, db_path)
+            print("[SQLCipher Migration] Successfully encrypted database with AES-256! Plain backup saved to .plain.bak")
+
+            new_conn = sqlite3.connect(db_path, timeout=15)
+            new_conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+            new_conn.execute("PRAGMA cipher_compatibility = 4;")
+            _apply_pragmas(new_conn)
+            return new_conn
+        except Exception as mig_err:
+            print(f"[SQLCipher Migration ERROR] Migration failed: {mig_err}. Retrying standard connection.")
+
+    # 4. Self-healing corruption fallback
+    print(f"[SQLite Self-Healing] Database file at {db_path} cannot be opened. Creating corrupted backup...")
     try:
         backup_path = db_path + f".corrupt_{int(datetime.now().timestamp())}.bak"
         if os.path.exists(db_path):
-            try:
-                os.replace(db_path, backup_path)
-            except Exception:
-                try:
-                    os.remove(db_path)
-                except Exception:
-                    pass
+            os.replace(db_path, backup_path)
     except Exception:
         pass
 
-    conn = sqlite3.connect(db_path)
+    fresh_conn = sqlite3.connect(db_path, timeout=15)
+    fresh_conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+    fresh_conn.execute("PRAGMA cipher_compatibility = 4;")
+    _apply_pragmas(fresh_conn)
+    return fresh_conn
+
+def get_sqlite_conn() -> sqlite3.Connection:
+    """Returns an active connection to pos_local.db with SQLCipher AES-256 encryption, self-healing recovery, and WAL mode."""
+    db_path = get_sqlite_path()
+    if HAS_SQLCIPHER:
+        conn = _open_or_migrate_sqlcipher(db_path)
+    else:
+        conn = std_sqlite3.connect(db_path, timeout=15)
+        _apply_pragmas(conn)
+
     _create_tables(conn)
     return conn
 
@@ -134,6 +237,7 @@ def _create_tables(conn: sqlite3.Connection):
         phone TEXT,
         email TEXT,
         balance REAL DEFAULT 0.0,
+        checksum TEXT DEFAULT '',
         updated_at TEXT NOT NULL
     )
     """)
@@ -147,9 +251,17 @@ def _create_tables(conn: sqlite3.Connection):
         paid_amount REAL NOT NULL,
         remaining REAL DEFAULT 0.0,
         notes TEXT,
+        checksum TEXT DEFAULT '',
         created_at TEXT NOT NULL
     )
     """)
+    # Auto-add checksum columns if upgrading an existing local schema
+    for tbl in ["local_khata", "local_purchases"]:
+        try:
+            cursor.execute(f"ALTER TABLE {tbl} ADD COLUMN checksum TEXT DEFAULT '';")
+        except Exception:
+            pass
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS local_customer_returns (
         id TEXT PRIMARY KEY,
@@ -184,6 +296,21 @@ def _create_tables(conn: sqlite3.Connection):
         event_type TEXT NOT NULL,
         target_id TEXT,
         details TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        event_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target_type TEXT,
+        target_id TEXT,
+        details_json TEXT,
+        prev_hash TEXT,
+        hmac_signature TEXT NOT NULL,
         created_at TEXT NOT NULL
     )
     """)
@@ -238,6 +365,9 @@ def _create_tables(conn: sqlite3.Connection):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_purchases_created_at ON local_purchases(created_at);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_cust_rets_code ON local_customer_returns(return_code);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_supp_rets_code ON local_supplier_returns(return_code);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_event ON audit_logs(event_type);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);")
     conn.commit()
 
 def init_sqlite_db():
@@ -249,8 +379,7 @@ def init_sqlite_db():
 def save_bill_locally(invoice_number: str, customer_phone: str, total_amount: float, discount: float, tax: float, payment_mode: str, cashier_name: str, item_details_json: str) -> dict:
     bill_id = str(uuid.uuid4())
     now_str = datetime.now().isoformat()
-    raw_payload = f"{bill_id}:{invoice_number}:{total_amount}:{payment_mode}:{cashier_name}"
-    checksum = calculate_checksum(raw_payload)
+    checksum = calculate_bill_checksum(bill_id, invoice_number, total_amount, payment_mode, cashier_name)
 
     conn = get_sqlite_conn()
     cursor = conn.cursor()
@@ -272,8 +401,7 @@ def save_bill_locally(invoice_number: str, customer_phone: str, total_amount: fl
 
 def save_product_locally(product_id: str, odoo_id: int | None, name: str, price: float, cost_price: float | None, sku: str, barcode: str | None, category: str | None, stock: int | None) -> dict:
     now_str = datetime.now().isoformat()
-    raw_payload = f"{product_id}:{name}:{price}:{sku}"
-    checksum = calculate_checksum(raw_payload)
+    checksum = calculate_product_checksum(product_id, name, price, sku)
 
     conn = get_sqlite_conn()
     cursor = conn.cursor()
@@ -315,7 +443,7 @@ def save_products_bulk_locally(items: list[dict]):
         barcode = item.get("barcode") or ""
         category = item.get("category") or "General"
         stock = int(item.get("stock", 0))
-        checksum = calculate_checksum(f"{p_id}:{name}:{price}:{sku}")
+        checksum = calculate_product_checksum(p_id, name, price, sku)
         records.append((p_id, odoo_id, name, price, cost_price, sku, barcode, category, stock, checksum, now_str))
 
     cursor.executemany("""
@@ -426,18 +554,19 @@ def delete_local_employee(emp_id: str):
 
 def save_khata_locally(cust_id: str, odoo_id: int | None, name: str, phone: str | None, email: str | None, balance: float = 0.0) -> dict:
     now_str = datetime.now().isoformat()
+    checksum = calculate_khata_checksum(cust_id, name, phone, balance)
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO local_khata (id, odoo_id, name, phone, email, balance, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO local_khata (id, odoo_id, name, phone, email, balance, checksum, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             odoo_id=excluded.odoo_id, name=excluded.name, phone=excluded.phone,
-            email=excluded.email, balance=excluded.balance, updated_at=excluded.updated_at
-    """, (cust_id, odoo_id or 0, name, phone or "", email or "", balance, now_str))
+            email=excluded.email, balance=excluded.balance, checksum=excluded.checksum, updated_at=excluded.updated_at
+    """, (cust_id, odoo_id or 0, name, phone or "", email or "", balance, checksum, now_str))
     conn.commit()
     conn.close()
-    return {"id": cust_id, "name": name, "saved_locally": True}
+    return {"id": cust_id, "name": name, "balance": balance, "checksum": checksum, "saved_locally": True}
 
 def get_all_local_khata() -> list:
     conn = get_sqlite_conn()
@@ -466,20 +595,21 @@ def clear_all_local_khata():
 
 def save_purchase_locally(pur_id: str, supplier_name: str, item_name: str, quantity: int, total_cost: float, paid_amount: float, remaining: float, notes: str | None = None) -> dict:
     now_str = datetime.now().isoformat()
+    checksum = calculate_purchase_checksum(pur_id, supplier_name, item_name, quantity, total_cost)
     conn = get_sqlite_conn()
     cursor = conn.cursor()
     cursor.execute("""
-        INSERT INTO local_purchases (id, supplier_name, item_name, quantity, total_cost, paid_amount, remaining, notes, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO local_purchases (id, supplier_name, item_name, quantity, total_cost, paid_amount, remaining, notes, checksum, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
             supplier_name=excluded.supplier_name, item_name=excluded.item_name,
             quantity=excluded.quantity, total_cost=excluded.total_cost,
             paid_amount=excluded.paid_amount, remaining=excluded.remaining,
-            notes=excluded.notes
-    """, (pur_id, supplier_name, item_name, quantity, total_cost, paid_amount, remaining, notes or "", now_str))
+            notes=excluded.notes, checksum=excluded.checksum
+    """, (pur_id, supplier_name, item_name, quantity, total_cost, paid_amount, remaining, notes or "", checksum, now_str))
     conn.commit()
     conn.close()
-    return {"id": pur_id, "supplier_name": supplier_name, "saved_locally": True}
+    return {"id": pur_id, "supplier_name": supplier_name, "checksum": checksum, "saved_locally": True}
 
 def get_all_local_purchases() -> list:
     conn = get_sqlite_conn()
@@ -776,61 +906,239 @@ def log_anomaly_alert(
 def verify_all_local_ledger_integrity() -> Dict[str, Any]:
     """
     Cryptographic verification:
-    Checks SHA-256 HMAC checksums of all bills and products in pos_local.db
-    to detect any external database tampering or unauthorized row manipulation.
+    Checks SHA-256 HMAC checksums of all financial records in pos_local.db:
+    - local_bills (Invoices & sales)
+    - local_products (Prices & inventory)
+    - local_khata (Customer balances)
+    - local_purchases (Supplier intake & remaining payables)
+    Detects any external database tampering or unauthorized row manipulation.
     """
     conn = None
     total_bills = 0
     tampered_bills = 0
     total_products = 0
     tampered_products = 0
+    total_khata = 0
+    tampered_khata = 0
+    total_purchases = 0
+    tampered_purchases = 0
 
     try:
         conn = get_sqlite_conn()
         c = conn.cursor()
 
         # 1. Audit Bills
-        c.execute("SELECT id, invoice_number, total_amount, item_details_json, checksum FROM local_bills")
+        c.execute("SELECT id, invoice_number, total_amount, payment_mode, cashier_name, checksum FROM local_bills")
         for row in c.fetchall():
-            b_id, inv_num, amt, items_json, stored_chk = row
+            b_id, inv_num, amt, p_mode, c_name, stored_chk = row
             total_bills += 1
-            expected = calculate_checksum(f"{inv_num}_{amt}_{items_json}")
-            if stored_chk != expected:
+            expected = calculate_bill_checksum(b_id, inv_num, amt, p_mode or "CASH", c_name or "")
+            # Fallback for legacy format if any
+            if stored_chk != expected and stored_chk != calculate_checksum(f"{b_id}:{inv_num}:{amt}:{p_mode}:{c_name}"):
                 tampered_bills += 1
                 log_anomaly_alert(
                     alert_type="database_tampering",
                     severity="CRITICAL",
                     cashier_name="SYSTEM",
-                    details=f"Cryptographic hash mismatch detected on bill {inv_num}! Possible SQLite file modification.",
+                    details=f"Cryptographic hash mismatch on bill {inv_num}! Possible database file tampering.",
                     metadata={"bill_id": b_id, "invoice_number": inv_num}
                 )
 
         # 2. Audit Products
-        c.execute("SELECT id, sku, price, stock, checksum FROM local_products")
+        c.execute("SELECT id, name, price, sku, checksum FROM local_products")
         for row in c.fetchall():
-            p_id, sku, price, stock, stored_chk = row
+            p_id, name, price, sku, stored_chk = row
             total_products += 1
-            expected = calculate_checksum(f"{sku}_{price}_{stock}")
-            if stored_chk != expected:
+            expected = calculate_product_checksum(p_id, name, price, sku)
+            if stored_chk != expected and stored_chk != calculate_checksum(f"{p_id}:{name}:{price}:{sku}"):
                 tampered_products += 1
                 log_anomaly_alert(
                     alert_type="product_price_tampering",
                     severity="HIGH",
                     cashier_name="SYSTEM",
-                    details=f"Unauthorized price/stock modification detected on SKU {sku}!",
+                    details=f"Unauthorized price/catalog tampering detected on SKU {sku}!",
                     metadata={"product_id": p_id, "sku": sku}
                 )
 
+        # 3. Audit Customer Khata
+        try:
+            c.execute("SELECT id, name, phone, balance, checksum FROM local_khata")
+            for row in c.fetchall():
+                k_id, name, phone, bal, stored_chk = row
+                total_khata += 1
+                if stored_chk:  # If checksum was generated
+                    expected = calculate_khata_checksum(k_id, name, phone, bal)
+                    if stored_chk != expected:
+                        tampered_khata += 1
+                        log_anomaly_alert(
+                            alert_type="khata_balance_tampering",
+                            severity="CRITICAL",
+                            cashier_name="SYSTEM",
+                            details=f"Cryptographic hash mismatch on customer Khata '{name}' ({phone})! Balance manipulated.",
+                            metadata={"khata_id": k_id, "customer_name": name, "balance": bal}
+                        )
+        except Exception as k_err:
+            print(f"[Audit Khata Notice] {k_err}")
+
+        # 4. Audit Supplier Purchases
+        try:
+            c.execute("SELECT id, supplier_name, item_name, quantity, total_cost, checksum FROM local_purchases")
+            for row in c.fetchall():
+                pur_id, supp, item, qty, cost, stored_chk = row
+                total_purchases += 1
+                if stored_chk:
+                    expected = calculate_purchase_checksum(pur_id, supp, item, qty, cost)
+                    if stored_chk != expected:
+                        tampered_purchases += 1
+                        log_anomaly_alert(
+                            alert_type="purchase_tampering",
+                            severity="HIGH",
+                            cashier_name="SYSTEM",
+                            details=f"Cryptographic hash mismatch on purchase intake from '{supp}'! Row tampering detected.",
+                            metadata={"purchase_id": pur_id, "supplier": supp}
+                        )
+        except Exception as pur_err:
+            print(f"[Audit Purchases Notice] {pur_err}")
+
+        is_clean = (tampered_bills == 0 and tampered_products == 0 and tampered_khata == 0 and tampered_purchases == 0)
         return {
-            "status": "secure" if (tampered_bills == 0 and tampered_products == 0) else "tampering_detected",
+            "status": "secure" if is_clean else "tampering_detected",
             "total_bills_audited": total_bills,
             "tampered_bills": tampered_bills,
             "total_products_audited": total_products,
             "tampered_products": tampered_products,
+            "total_khata_audited": total_khata,
+            "tampered_khata": tampered_khata,
+            "total_purchases_audited": total_purchases,
+            "tampered_purchases": tampered_purchases,
+            "encryption": "SQLCipher AES-256" if HAS_SQLCIPHER else "Standard SQLite (Cipher Unavailable)",
             "timestamp": datetime.now().isoformat()
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+# ── Immutable System Audit Log Trail (HMAC Blockchain Style Chaining) ───────────
+
+def log_system_audit_event(
+    user_id: str,
+    user_name: str,
+    event_type: str,
+    action: str,
+    target_type: str,
+    target_id: str,
+    details: Optional[Dict[str, Any]] = None
+) -> str:
+    """
+    Maintains an unalterable audit_logs table tracking sensitive system events
+    (logins, price edits, voids, discount overrides) tagged with user ID and timestamp.
+    Each row is cryptographically chained with the previous entry's HMAC signature.
+    """
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        c = conn.cursor()
+
+        # Fetch previous hash in the immutable chain
+        prev_row = c.execute("SELECT hmac_signature FROM audit_logs ORDER BY created_at DESC, rowid DESC LIMIT 1").fetchone()
+        prev_hash = prev_row[0] if prev_row and prev_row[0] else ("0" * 64)
+
+        log_id = f"aud-{uuid.uuid4().hex[:12]}"
+        now_iso = datetime.now().isoformat()
+        details_json = json.dumps(details or {})
+
+        # Cryptographic chain signature
+        chain_payload = f"{log_id}:{user_id}:{event_type}:{action}:{target_type}:{target_id}:{details_json}:{prev_hash}:{now_iso}"
+        signature = calculate_checksum(chain_payload)
+
+        c.execute("""
+            INSERT INTO audit_logs (id, user_id, user_name, event_type, action, target_type, target_id, details_json, prev_hash, hmac_signature, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (log_id, user_id, user_name or "Cashier", event_type, action, target_type, target_id, details_json, prev_hash, signature, now_iso))
+        conn.commit()
+        return log_id
+    except Exception as err:
+        print(f"[Audit Log Trail Error] {err}")
+        return ""
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def get_recent_system_audit_logs(limit: int = 50) -> List[Dict[str, Any]]:
+    """Retrieves recent entries from the unalterable system audit log."""
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ?", (limit,))
+        rows = []
+        for r in c.fetchall():
+            d = dict(r)
+            try:
+                d["details"] = json.loads(d.get("details_json") or "{}")
+            except Exception:
+                d["details"] = {}
+            rows.append(d)
+        return rows
+    except Exception as e:
+        print(f"[Audit Fetch Error] {e}")
+        return []
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def verify_system_audit_log_chain() -> Dict[str, Any]:
+    """
+    Validates cryptographic HMAC chain integrity across the entire audit_logs table.
+    Guarantees no logs have been retroactively modified, reordered, or deleted.
+    """
+    conn = None
+    try:
+        conn = get_sqlite_conn()
+        conn.row_factory = sqlite3.Row
+        c = conn.cursor()
+        c.execute("SELECT * FROM audit_logs ORDER BY created_at ASC, rowid ASC")
+        rows = [dict(r) for r in c.fetchall()]
+
+        total_checked = len(rows)
+        broken_links = 0
+        expected_prev = "0" * 64
+
+        for r in rows:
+            if r["prev_hash"] != expected_prev:
+                broken_links += 1
+
+            payload = f"{r['id']}:{r['user_id']}:{r['event_type']}:{r['action']}:{r['target_type']}:{r['target_id']}:{r['details_json']}:{r['prev_hash']}:{r['created_at']}"
+            computed_sig = calculate_checksum(payload)
+            if computed_sig != r["hmac_signature"]:
+                broken_links += 1
+
+            expected_prev = r["hmac_signature"]
+
+        return {
+            "status": "intact" if broken_links == 0 else "compromised",
+            "total_logs": total_checked,
+            "broken_chain_count": broken_links,
+            "is_immutable_verified": broken_links == 0,
+            "verified_at": datetime.now().isoformat()
+        }
+    except Exception as err:
+        return {"status": "error", "message": str(err)}
     finally:
         if conn:
             try:

@@ -3,6 +3,7 @@ import './globals.css';
 import SidebarWrapper from '@/components/layout/SidebarWrapper';
 import MainContentLayout from '@/components/layout/MainContentLayout';
 import AntiTamperGuard from '@/components/security/AntiTamperGuard';
+import InactivityScreenLock from '@/components/security/InactivityScreenLock';
 import AIManagerWidget from '@/components/ai/AIManagerWidget';
 import BackendHealthGuard from '@/components/layout/BackendHealthGuard';
 
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <SidebarWrapper />
           <MainContentLayout>{children}</MainContentLayout>
           <AntiTamperGuard />
+          <InactivityScreenLock />
           <AIManagerWidget />
         </BackendHealthGuard>
       </body>

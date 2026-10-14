@@ -14,7 +14,7 @@ from app.services.storage_service import upload_product_image_with_fallback
 router = APIRouter(tags=["Catalog & Products"])
 
 import asyncio
-from app.services.sqlite_sync_service import save_product_locally, get_all_local_products, delete_local_product, save_products_bulk_locally
+from app.services.sqlite_sync_service import save_product_locally, get_all_local_products, delete_local_product, save_products_bulk_locally, log_system_audit_event
 from app.services.backup_service import backup_all_data_to_hard_drive
 
 # In-memory RAM cache for instant sub-millisecond product list responses
@@ -152,6 +152,16 @@ async def update_product(product_id: str, product_update: ProductCreate, db: Asy
             category=data.get("category"),
             stock=data.get("stock")
         )
+        # Log immutable security audit event
+        log_system_audit_event(
+            user_id="cashier_admin",
+            user_name="Cashier/Admin",
+            event_type="price_edit",
+            action="UPDATE_PRODUCT_PRICE",
+            target_type="PRODUCT",
+            target_id=product_id,
+            details={"name": data.get("name"), "new_price": data.get("price"), "cost_price": data.get("cost_price"), "sku": data.get("sku")}
+        )
     except Exception as sq_err:
         print(f"SQLite update product notice: {sq_err}")
 
@@ -182,6 +192,15 @@ async def delete_product(product_id: str, db: AsyncSession = Depends(get_db1)):
     try:
         delete_local_product(product_id)
         invalidate_product_cache()
+        log_system_audit_event(
+            user_id="cashier_admin",
+            user_name="Cashier/Admin",
+            event_type="catalog_delete",
+            action="DELETE_PRODUCT",
+            target_type="PRODUCT",
+            target_id=product_id,
+            details={"product_id": product_id}
+        )
     except Exception:
         pass
 

@@ -93,9 +93,36 @@ async def verify_email_otp_endpoint(req: VerifyEmailOTPRequest, response: Respon
     is_valid, msg = verify_email_otp(norm_email, req.otp)
     
     if not is_valid:
+        try:
+            from app.services.sqlite_sync_service import log_system_audit_event
+            log_system_audit_event(
+                user_id=norm_email,
+                user_name=norm_email,
+                event_type="auth_failed",
+                action="EMAIL_OTP_LOGIN_FAILED",
+                target_type="USER",
+                target_id=norm_email,
+                details={"reason": msg}
+            )
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=msg)
 
     set_httponly_auth_cookies(response, email=norm_email, role="ADMIN", is_vercel_prod=True)
+
+    try:
+        from app.services.sqlite_sync_service import log_system_audit_event
+        log_system_audit_event(
+            user_id=norm_email,
+            user_name=norm_email,
+            event_type="auth_login",
+            action="EMAIL_OTP_LOGIN_SUCCESS",
+            target_type="USER",
+            target_id=norm_email,
+            details={"role": "ADMIN"}
+        )
+    except Exception:
+        pass
 
     return {
         "status": "success",
@@ -116,4 +143,16 @@ async def get_current_user_profile(user: dict = Depends(get_current_user_from_co
 @router.post("/logout")
 async def logout_endpoint(response: Response):
     clear_httponly_auth_cookies(response, is_vercel_prod=True)
+    try:
+        from app.services.sqlite_sync_service import log_system_audit_event
+        log_system_audit_event(
+            user_id="cashier",
+            user_name="Cashier/Admin",
+            event_type="auth_logout",
+            action="LOGOUT",
+            target_type="USER",
+            target_id="session"
+        )
+    except Exception:
+        pass
     return {"status": "success", "message": "Successfully logged out. Session cookies cleared."}

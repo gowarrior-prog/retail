@@ -21,6 +21,15 @@ SYSTEM_SECRET = os.getenv("SECURITY_HMAC_SECRET", "BilalClothHouse_Secure_HMAC_K
 MAX_ROLLING_BACKUPS = 14
 
 
+try:
+    import sqlcipher3 as sqlite3
+    HAS_SQLCIPHER = True
+except ImportError:
+    import sqlite3
+    HAS_SQLCIPHER = False
+
+SQLCIPHER_PASSPHRASE = os.getenv("SQLCIPHER_PASSPHRASE", SYSTEM_SECRET)
+
 def get_backups_dir() -> str:
     """Returns the dedicated backups directory inside the system AppData folder."""
     base_dir = get_app_data_dir()
@@ -40,8 +49,8 @@ def calculate_file_checksum(filepath: str) -> str:
 
 def create_rolling_backup(trigger_reason: str = "daily") -> Dict[str, Any]:
     """
-    Creates an atomic hot backup of pos_local.db using SQLite's native backup API.
-    Guarantees zero database corruption even during active billing operations.
+    Creates an atomic hot backup of pos_local.db using SQLite/SQLCipher's native backup API.
+    Guarantees zero database corruption even during active billing operations, with AES-256 encryption.
     """
     db_path = get_sqlite_path()
     if not os.path.exists(db_path):
@@ -59,6 +68,10 @@ def create_rolling_backup(trigger_reason: str = "daily") -> Dict[str, Any]:
     dest_conn = None
     try:
         src_conn = sqlite3.connect(db_path, timeout=15)
+        if HAS_SQLCIPHER:
+            src_conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+            src_conn.execute("PRAGMA cipher_compatibility = 4;")
+
         # Flush WAL changes to main database before backup
         try:
             src_conn.execute("PRAGMA wal_checkpoint(PASSIVE);")
@@ -66,6 +79,10 @@ def create_rolling_backup(trigger_reason: str = "daily") -> Dict[str, Any]:
             pass
 
         dest_conn = sqlite3.connect(backup_path)
+        if HAS_SQLCIPHER:
+            dest_conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+            dest_conn.execute("PRAGMA cipher_compatibility = 4;")
+
         # Native online backup: zero lock on live point-of-sale operations
         src_conn.backup(dest_conn)
         dest_conn.close()
@@ -73,12 +90,16 @@ def create_rolling_backup(trigger_reason: str = "daily") -> Dict[str, Any]:
 
         # Verify integrity of newly created snapshot
         verify_conn = sqlite3.connect(backup_path)
+        if HAS_SQLCIPHER:
+            verify_conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+            verify_conn.execute("PRAGMA cipher_compatibility = 4;")
+
         chk = verify_conn.execute("PRAGMA quick_check;").fetchone()
         
         # Collect entity counts for audit report
         c = verify_conn.cursor()
         counts = {}
-        for tbl in ["local_bills", "local_products", "local_khata", "local_purchases", "local_employees"]:
+        for tbl in ["local_bills", "local_products", "local_khata", "local_purchases", "local_employees", "audit_logs"]:
             try:
                 res = c.execute(f"SELECT count(*) FROM {tbl}").fetchone()
                 counts[tbl] = res[0] if res else 0

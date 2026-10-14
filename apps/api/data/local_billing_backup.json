@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "id": "0dc19c0d-3e6b-406b-9f8d-6309471d1c93",
+    "invoice_number": "INV-298B6047",
+    "customer_phone": "03000000000",
+    "total_amount": 0.0,
+    "discount": 0.0,
+    "tax": 0.0,
+    "payment_mode": "CASH",
+    "cashier_name": "Admin",
+    "item_details_json": "[{\"product_id\": \"prod-3fce28af\", \"product_name\": \"Cotton Suit\", \"price\": 0.0, \"unit_price\": 0.0, \"cost_price\": 0.0, \"quantity\": 1, \"discount_percentage\": 0.0}]",
+    "billing_date": "2026-10-14 19:25:33.380475+00:00",
+    "created_at": "2026-10-14 19:25:33.380475+00:00"
+  }
+]

@@ -584,6 +584,22 @@ async def pos_checkout(req: POSCheckoutRequest):
         except Exception as khata_sq_err:
             print(f"SQLite khata save notice: {khata_sq_err}")
 
+    # Audit discount override if cashier applied discounts
+    if calc.get("discount_total", 0) > 0:
+        try:
+            from app.services.sqlite_sync_service import log_system_audit_event
+            log_system_audit_event(
+                user_id=req.cashier_name or "cashier",
+                user_name=req.cashier_name or "Cashier",
+                event_type="discount_override",
+                action="POS_DISCOUNT_APPLIED",
+                target_type="INVOICE",
+                target_id=inv_num,
+                details={"discount_amount": calc["discount_total"], "grand_total": calc["grand_total"], "invoice": inv_num}
+            )
+        except Exception:
+            pass
+
     # Offload cloud DB sync to background task so checkout returns in < 2ms!
     asyncio.create_task(_bg_sync_bill_to_cloud(req, inv_num, calc, items_json_str, local_bill["id"]))
 
@@ -750,6 +766,20 @@ async def create_customer_return(req: CustomerReturnCreateRequest):
         condition=req.condition,
         status=req.status
     )
+
+    try:
+        from app.services.sqlite_sync_service import log_system_audit_event
+        log_system_audit_event(
+            user_id="cashier",
+            user_name="Cashier",
+            event_type="void_return",
+            action="CUSTOMER_RETURN_PROCESSED",
+            target_type="RETURN",
+            target_id=ret_code,
+            details={"original_invoice": req.original_invoice, "total_value": req.total_value, "refund_type": req.refund_type, "return_code": ret_code}
+        )
+    except Exception:
+        pass
 
     if req.condition == "Restocked":
         for item in req.items:

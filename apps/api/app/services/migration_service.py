@@ -247,6 +247,37 @@ def m005_performance_indexes(conn: sqlite3.Connection):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_purchases_created ON local_purchases(created_at);")
 
 
+def m006_sqlcipher_and_ledger_checksums(conn: sqlite3.Connection):
+    cursor = conn.cursor()
+    # 1. Add checksum columns to financial ledgers (Khata & Purchases) if not present
+    for table in ["local_khata", "local_purchases"]:
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN checksum TEXT DEFAULT '';")
+        except Exception:
+            # Column already exists
+            pass
+
+    # 2. Immutable Cryptographic System Audit Logs Table
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        event_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target_type TEXT,
+        target_id TEXT,
+        details_json TEXT,
+        prev_hash TEXT,
+        hmac_signature TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    """)
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_event ON audit_logs(event_type);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs(user_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);")
+
+
 # Registry of all migrations in order
 ALL_MIGRATIONS: List[Migration] = [
     Migration(1, "001_core_schema", "Initial database schema across 9 modules", m001_initial_core_schema),
@@ -254,6 +285,7 @@ ALL_MIGRATIONS: List[Migration] = [
     Migration(3, "003_print_queue_and_shifts", "Robust print queue and register shift tracking", m003_print_queue_and_shifts),
     Migration(4, "004_cart_sessions_mirror", "Local cart session mirror for crash recovery", m004_cart_sessions_mirror),
     Migration(5, "005_performance_indexes", "High-speed composite indexes for instant query response", m005_performance_indexes),
+    Migration(6, "006_sqlcipher_and_ledger_checksums", "Financial ledger checksum columns and immutable audit log chain", m006_sqlcipher_and_ledger_checksums),
 ]
 
 
@@ -261,9 +293,10 @@ def run_all_migrations() -> Dict[str, Any]:
     """
     Runs all unapplied schema migrations atomically on FastAPI sidecar boot.
     Safeguards existing data while updating tables to the latest version.
+    Supports SQLCipher transparently via get_sqlite_conn.
     """
-    db_path = get_sqlite_path()
-    conn = sqlite3.connect(db_path, timeout=20)
+    from app.services.sqlite_sync_service import get_sqlite_conn
+    conn = get_sqlite_conn()
     _ensure_migrations_table(conn)
 
     cursor = conn.cursor()
