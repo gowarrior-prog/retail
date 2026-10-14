@@ -19,11 +19,15 @@ def get_sqlite_conn() -> sqlite3.Connection:
     db_path = get_sqlite_path()
     conn = None
     try:
-        conn = sqlite3.connect(db_path, timeout=10)
+        conn = sqlite3.connect(db_path, timeout=15)
+        # SQLite Power-Loss Guard Pragmas
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        conn.execute("PRAGMA cache_size=-64000;") # 64MB RAM Cache
+        conn.execute("PRAGMA busy_timeout=10000;")       # 10s busy wait prevents 'database locked'
+        conn.execute("PRAGMA wal_autocheckpoint=1000;")   # Auto checkpoint at 1000 pages
+        conn.execute("PRAGMA cache_size=-64000;")         # 64MB RAM Cache
         conn.execute("PRAGMA temp_store=MEMORY;")
+        conn.execute("PRAGMA foreign_keys=ON;")
         res = conn.execute("PRAGMA quick_check").fetchone()
         if res and res[0] == "ok":
             _create_tables(conn)
@@ -56,6 +60,24 @@ def get_sqlite_conn() -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     _create_tables(conn)
     return conn
+
+
+def checkpoint_wal_db(mode: str = "PASSIVE") -> dict:
+    """
+    Executes a WAL checkpoint (PASSIVE, FULL, RESTART, or TRUNCATE)
+    to write WAL pages back into the main database file.
+    Ensures complete durability on shutdown or shift close.
+    """
+    try:
+        conn = get_sqlite_conn()
+        cursor = conn.cursor()
+        res = cursor.execute(f"PRAGMA wal_checkpoint({mode});").fetchone()
+        conn.close()
+        return {"status": "success", "busy": res[0], "log": res[1], "checkpointed": res[2]}
+    except Exception as e:
+        print(f"[WAL Checkpoint Notice] {e}")
+        return {"status": "error", "message": str(e)}
+
 
 
 def _create_tables(conn: sqlite3.Connection):

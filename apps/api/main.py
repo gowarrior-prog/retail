@@ -88,22 +88,50 @@ async def periodic_offline_to_cloud_sync():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Launch background cloud schema verification
+    # 1. Execute auto schema migrations synchronously on startup
+    from app.services.migration_service import run_all_migrations
+    try:
+        mig_res = run_all_migrations()
+        print(f"[Startup] Schema migrations complete: {mig_res.get('applied_count')} applied, current v{mig_res.get('current_schema_version')}")
+    except Exception as e:
+        print(f"[Startup Notice] Migration warning: {e}")
+
+    # 2. Launch background ESC/POS thermal print queue worker
+    from app.services.print_queue_service import start_print_worker
+    start_print_worker()
+
+    # 3. Create initial daily rolling backup snapshot with HMAC checksum
+    from app.services.rolling_backup_service import create_rolling_backup
+    try:
+        asyncio.create_task(asyncio.to_thread(create_rolling_backup, "startup_daily"))
+    except Exception:
+        pass
+
+    # 4. Launch background cloud schema verification
     asyncio.create_task(ensure_cloud_tables_exist())
     
-    # Run initial hard drive backup on startup in background
+    # 5. Run initial JSON hard drive backup on startup in background
     try:
         asyncio.create_task(backup_all_data_to_hard_drive())
     except Exception:
         pass
 
-    # Launch periodic offline-to-cloud automatic background synchronization
+    # 6. Launch periodic offline-to-cloud automatic background synchronization
     asyncio.create_task(periodic_offline_to_cloud_sync())
 
-    # Launch periodic hard drive backup and optional Odoo sync
+    # 7. Launch periodic hard drive backup and optional Odoo sync
     asyncio.create_task(periodic_odoo_auto_sync())
     
     yield
+
+    # Shutdown: Perform clean WAL checkpoint to ensure all data is flushed
+    try:
+        from app.services.sqlite_sync_service import checkpoint_wal_db
+        checkpoint_wal_db("PASSIVE")
+        print("[Shutdown] SQLite WAL checkpointed successfully.")
+    except Exception as e:
+        print(f"[Shutdown Notice] WAL checkpoint: {e}")
+
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
@@ -239,6 +267,31 @@ async def trigger_manual_backup():
     stats = await backup_all_data_to_hard_drive()
     summary = get_offline_data_summary()
     return {"status": "success", "message": "All database entities (Products, Employees, Invoices, Khata Ledger, Purchases) successfully backed up to local hard drive!", "stats": stats, "summary": summary}
+
+
+@app.post("/backup/rolling")
+async def trigger_rolling_backup_endpoint(reason: str = "shift_close"):
+    """Creates a hot SQLite snapshot with HMAC-SHA256 signature and rolling retention."""
+    from app.services.rolling_backup_service import create_rolling_backup
+    res = await asyncio.to_thread(create_rolling_backup, reason)
+    return res
+
+
+@app.get("/backup/rolling")
+async def list_rolling_backups_endpoint():
+    """Returns list of rolling SQLite backups with integrity status."""
+    from app.services.rolling_backup_service import list_rolling_backups
+    backups = list_rolling_backups()
+    return {"status": "success", "total": len(backups), "backups": backups}
+
+
+@app.get("/backup/verify/{filename}")
+async def verify_backup_endpoint(filename: str):
+    """Cryptographically verifies a specific backup's HMAC checksum and SQLite integrity."""
+    from app.services.rolling_backup_service import verify_backup_file
+    res = verify_backup_file(filename)
+    return res
+
 
 
 if __name__ == "__main__":

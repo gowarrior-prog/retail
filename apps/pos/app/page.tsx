@@ -18,6 +18,12 @@ export default function CheckoutPOSPage() {
 
   useEffect(() => {
     loadProducts();
+
+    // Check if previous cart session was automatically recovered
+    const recoveredItems = useCartStore.getState().items;
+    if (recoveredItems.length > 0) {
+      showCatalogToast(`✓ Restored active cart (${recoveredItems.length} items from previous session)`, 'scan');
+    }
   }, [loadProducts]);
 
   useEffect(() => {

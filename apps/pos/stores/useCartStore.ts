@@ -1,5 +1,6 @@
 'use client';
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import { sanitizeText, sanitizeBarcode, sanitizePhone, sanitizeUrl } from '@/lib/sanitize';
 
 export interface CartItem {
@@ -70,7 +71,9 @@ interface CartState {
   deleteHeldOrder: (id: string) => void;
 }
 
-export const useCartStore = create<CartState>((set, get) => ({
+export const useCartStore = create<CartState>()(
+  persist(
+    (set, get) => ({
   items: [],
   taxRate: 0,
   globalDiscount: 0,
@@ -259,4 +262,26 @@ export const useCartStore = create<CartState>((set, get) => ({
       heldBills: state.heldBills.filter((h) => h.id !== id),
     }));
   },
-}));
+}),
+    {
+      name: 'bilal_pos_active_cart_v1',
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        items: state.items,
+        taxRate: state.taxRate,
+        globalDiscount: state.globalDiscount,
+        tenderedAmount: state.tenderedAmount,
+        orderNote: state.orderNote,
+        giftReceipt: state.giftReceipt,
+        emailCopy: state.emailCopy,
+        customerName: state.customerName,
+        customerPhone: state.customerPhone,
+        paymentMode: state.paymentMode,
+        cashierName: state.cashierName,
+        storeId: state.storeId,
+        heldBills: state.heldBills,
+      }),
+    }
+  )
+);
+
