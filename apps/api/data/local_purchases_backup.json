@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "id": "pur-1608c2df",
+    "supplier_name": "Return Shaan",
+    "item_name": "Fabric Stock",
+    "quantity": 0,
+    "total_cost": 0.0,
+    "paid_amount": 0.0,
+    "remaining": 0.0,
+    "notes": "Added via AI Smart Manager",
+    "purchase_date": "2026-10-14 18:43:15.865116+00:00",
+    "created_at": "2026-10-14 18:43:15.865116+00:00"
+  },
+  {
+    "id": "pur-42825b5e",
+    "supplier_name": "Costumer Return Subhan Ako",
+    "item_name": "Fabric Stock",
+    "quantity": 0,
+    "total_cost": 0.0,
+    "paid_amount": 0.0,
+    "remaining": 0.0,
+    "notes": "Added via AI Smart Manager",
+    "purchase_date": "2026-10-14 18:44:20.704930+00:00",
+    "created_at": "2026-10-14 18:44:20.704930+00:00"
+  }
+]

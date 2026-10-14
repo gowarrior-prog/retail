@@ -32,24 +32,31 @@ import os
 ENABLE_ODOO_SYNC = os.getenv("ENABLE_ODOO_SYNC", "false").lower() == "true"
 
 async def ensure_cloud_tables_exist():
-    """Background task to ensure all cloud tables exist in DB1, DB2, and DB3."""
-    for attempt in range(3):
-        try:
-            async with engine_db2.begin() as conn:
-                await conn.run_sync(Base2.metadata.create_all)
-            print("[Cloud DB2] Customer & Supplier Returns, Employees schema confirmed.")
-            break
-        except Exception as e:
-            await asyncio.sleep(2.0)
+    """Background task to ensure all cloud tables exist in DB1, DB2, and DB3 if configured."""
+    if not engine_db2 and not engine_db3:
+        print("[Offline Mode] Cloud DB not configured. Operating in full standalone local SQLite mode.")
+        return
 
-    for attempt in range(3):
-        try:
-            async with engine_db3.begin() as conn:
-                await conn.run_sync(Base3.metadata.create_all)
-            print("[Cloud DB3] Shop Purchases, Billing & Khata schema confirmed.")
-            break
-        except Exception as e:
-            await asyncio.sleep(2.0)
+    if engine_db2:
+        for attempt in range(3):
+            try:
+                async with engine_db2.begin() as conn:
+                    await conn.run_sync(Base2.metadata.create_all)
+                print("[Cloud DB2] Customer & Supplier Returns, Employees schema confirmed.")
+                break
+            except Exception as e:
+                await asyncio.sleep(2.0)
+
+    if engine_db3:
+        for attempt in range(3):
+            try:
+                async with engine_db3.begin() as conn:
+                    await conn.run_sync(Base3.metadata.create_all)
+                print("[Cloud DB3] Shop Purchases, Billing & Khata schema confirmed.")
+                break
+            except Exception as e:
+                await asyncio.sleep(2.0)
+
 
 async def periodic_odoo_auto_sync():
     """Background task: Automatically backs up data to local hard drive and syncs Odoo only if explicitly enabled."""
@@ -181,34 +188,38 @@ async def get_system_status():
 
     # Fast non-blocking checks for cloud DBs (max 0.5s each)
     db1_online = False
-    try:
-        async def check_db1():
-            async with SessionDb1() as s1:
-                await s1.execute(text("SELECT 1"))
-        await asyncio.wait_for(check_db1(), timeout=0.5)
-        db1_online = True
-    except Exception:
-        pass
+    if SessionDb1:
+        try:
+            async def check_db1():
+                async with SessionDb1() as s1:
+                    await s1.execute(text("SELECT 1"))
+            await asyncio.wait_for(check_db1(), timeout=0.5)
+            db1_online = True
+        except Exception:
+            pass
 
     db2_online = False
-    try:
-        async def check_db2():
-            async with SessionDb2() as s2:
-                await s2.execute(text("SELECT 1"))
-        await asyncio.wait_for(check_db2(), timeout=0.5)
-        db2_online = True
-    except Exception:
-        pass
+    if SessionDb2:
+        try:
+            async def check_db2():
+                async with SessionDb2() as s2:
+                    await s2.execute(text("SELECT 1"))
+            await asyncio.wait_for(check_db2(), timeout=0.5)
+            db2_online = True
+        except Exception:
+            pass
 
     db3_online = False
-    try:
-        async def check_db3():
-            async with SessionDb3() as s3:
-                await s3.execute(text("SELECT 1"))
-        await asyncio.wait_for(check_db3(), timeout=0.5)
-        db3_online = True
-    except Exception:
-        pass
+    if SessionDb3:
+        try:
+            async def check_db3():
+                async with SessionDb3() as s3:
+                    await s3.execute(text("SELECT 1"))
+            await asyncio.wait_for(check_db3(), timeout=0.5)
+            db3_online = True
+        except Exception:
+            pass
+
 
     pending_bills = get_pending_local_bills()
     return {
@@ -231,15 +242,23 @@ async def trigger_manual_backup():
 
 
 if __name__ == "__main__":
-    import os
+    import argparse
     import uvicorn
-    host = os.getenv("API_HOST", "0.0.0.0")
-    port = int(os.getenv("API_PORT", "8000"))
-    print(f"Starting High-Speed Scalable Bilal POS Server listening on http://{host}:{port}...")
+
+    parser = argparse.ArgumentParser(description="Bilal Cloth POS Backend API Sidecar")
+    parser.add_argument("--host", default=os.getenv("API_HOST", "0.0.0.0"), help="Host to bind")
+    parser.add_argument("--port", type=int, default=int(os.getenv("API_PORT", "8000")), help="Port to listen on")
+    parser.add_argument("--data-dir", default=os.getenv("POS_DATA_DIR", ""), help="AppData directory for SQLite")
+    args, _ = parser.parse_known_args()
+
+    if args.data_dir:
+        os.environ["POS_DATA_DIR"] = args.data_dir
+
+    print(f"Starting High-Speed Bilal POS Sidecar Server listening on http://{args.host}:{args.port}...")
     uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
+        app,
+        host=args.host,
+        port=args.port,
         reload=False,
         access_log=False,
         limit_concurrency=1000,

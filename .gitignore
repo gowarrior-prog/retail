@@ -49,5 +49,7 @@ target/
 *.db
 apps/api/data/*.db
 *.exe
+*.spec
 Bilal_Cloth_POS_Installers/
+
 

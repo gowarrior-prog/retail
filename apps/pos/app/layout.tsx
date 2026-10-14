@@ -4,6 +4,7 @@ import SidebarWrapper from '@/components/layout/SidebarWrapper';
 import MainContentLayout from '@/components/layout/MainContentLayout';
 import AntiTamperGuard from '@/components/security/AntiTamperGuard';
 import AIManagerWidget from '@/components/ai/AIManagerWidget';
+import BackendHealthGuard from '@/components/layout/BackendHealthGuard';
 
 export const metadata: Metadata = {
   title: 'BILAL CLOTH HOUSE — Modern Retail POS v17',
@@ -30,11 +31,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <meta name="referrer" content="strict-origin-when-cross-origin" />
       </head>
       <body className="h-full w-full font-sans text-slate-800 antialiased bg-slate-100 overflow-hidden">
-        <SidebarWrapper />
-        <MainContentLayout>{children}</MainContentLayout>
-        <AntiTamperGuard />
-        <AIManagerWidget />
+        <BackendHealthGuard>
+          <SidebarWrapper />
+          <MainContentLayout>{children}</MainContentLayout>
+          <AntiTamperGuard />
+          <AIManagerWidget />
+        </BackendHealthGuard>
       </body>
     </html>
   );
 }
+

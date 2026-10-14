@@ -8,10 +8,10 @@ from app.models.db1_catalog import ProductModel
 from app.models.db2_operations import EmployeeModel
 from app.models.db3_finance import BillingHistoryModel, CustomerKhataModel, ShopPurchaseModel
 
+from app.core.paths import get_app_data_dir
+
 def get_data_dir() -> str:
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-    os.makedirs(data_dir, exist_ok=True)
-    return data_dir
+    return get_app_data_dir()
 
 async def backup_all_data_to_hard_drive() -> dict:
     """

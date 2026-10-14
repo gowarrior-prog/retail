@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",
+    "build:sidecar": "node scripts/build-sidecar.cjs",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "desktop:build:x86": "tauri build --target i686-pc-windows-msvc",

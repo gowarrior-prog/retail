@@ -8,10 +8,7 @@ from datetime import datetime
 
 SYSTEM_SECRET = os.getenv("SECURITY_HMAC_SECRET", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#")
 
-def get_sqlite_path() -> str:
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data")
-    os.makedirs(data_dir, exist_ok=True)
-    return os.path.join(data_dir, "pos_local.db")
+from app.core.paths import get_sqlite_path, get_app_data_dir
 
 def calculate_checksum(data_str: str) -> str:
     """Generates SHA-256 HMAC signature to detect local database tampering."""
