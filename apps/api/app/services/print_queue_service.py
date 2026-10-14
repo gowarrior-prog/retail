@@ -8,8 +8,10 @@ Robust Non-Blocking ESC/POS Thermal Print Queue Worker for Bilal Cloth POS:
 
 import asyncio
 import json
-import uuid
-import sqlite3
+try:
+    import sqlcipher3 as sqlite3
+except ImportError:
+    import sqlite3
 from datetime import datetime
 from typing import Dict, Any, List, Optional
 
@@ -21,8 +23,9 @@ _PRINT_QUEUE: asyncio.Queue = asyncio.Queue()
 _WORKER_TASK: Optional[asyncio.Task] = None
 
 
-def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(get_sqlite_path(), timeout=10)
+def _get_conn():
+    from app.services.sqlite_sync_service import get_sqlite_conn
+    conn = get_sqlite_conn()
     conn.row_factory = sqlite3.Row
     return conn
 

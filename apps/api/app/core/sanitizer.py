@@ -63,6 +63,26 @@ def sanitize_input_string(value: str) -> str:
     return cleaned
 
 
+# Schema-level validator aliases for Pydantic models
+sanitize_text = sanitize_input_string
+
+
+def sanitize_barcode(value: str) -> str:
+    """Sanitizes barcode or SKU string to safe alphanumeric characters and hyphens."""
+    if not isinstance(value, str):
+        return value
+    cleaned = sanitize_input_string(value)
+    return re.sub(r"[^A-Za-z0-9_-]", "", cleaned)
+
+
+def sanitize_phone(value: str) -> str:
+    """Sanitizes phone numbers or CNIC to digits, +, and hyphens."""
+    if not isinstance(value, str):
+        return value
+    cleaned = sanitize_input_string(value)
+    return re.sub(r"[^0-9+\-\s]", "", cleaned).strip()
+
+
 def sanitize_data_structure(data: Any) -> Any:
     """Recursively traverses dictionaries, lists, and strings to sanitize all string leaves."""
     if isinstance(data, str):

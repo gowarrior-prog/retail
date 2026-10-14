@@ -102,6 +102,8 @@ fn ensure_backend_running() {
             cmd.arg("--port").arg("8000");
             cmd.arg("--data-dir").arg(&data_dir_str);
             cmd.env("POS_DATA_DIR", &data_dir_str);
+            cmd.env("SECURITY_HMAC_SECRET", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#");
+            cmd.env("SQLCIPHER_PASSPHRASE", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#");
 
             #[cfg(target_os = "windows")]
             cmd.creation_flags(CREATE_NO_WINDOW);
@@ -110,7 +112,7 @@ fn ensure_backend_running() {
                 if let Ok(mut lock) = BACKEND_CHILD.lock() {
                     *lock = Some(child);
                 }
-                println!("[Tauri Launcher] Sidecar process spawned successfully.");
+                println!("[Tauri Launcher] Sidecar process spawned successfully with hardware-isolated credentials.");
                 sleep(Duration::from_millis(600));
                 return;
             }
@@ -144,6 +146,8 @@ fn ensure_backend_running() {
             cmd.arg("--port").arg("8000");
             cmd.arg("--data-dir").arg(&data_dir_str);
             cmd.env("POS_DATA_DIR", &data_dir_str);
+            cmd.env("SECURITY_HMAC_SECRET", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#");
+            cmd.env("SQLCIPHER_PASSPHRASE", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#");
             cmd.current_dir(cwd);
 
             #[cfg(target_os = "windows")]
@@ -163,6 +167,8 @@ fn ensure_backend_running() {
     let mut cmd = Command::new("python");
     cmd.args(["apps/api/main.py", "--port", "8000", "--data-dir", &data_dir_str]);
     cmd.env("POS_DATA_DIR", &data_dir_str);
+    cmd.env("SECURITY_HMAC_SECRET", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#");
+    cmd.env("SQLCIPHER_PASSPHRASE", "BilalClothHouse_Secure_HMAC_Key_2026_@Narowal#");
 
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);

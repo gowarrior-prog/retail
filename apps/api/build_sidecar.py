@@ -18,6 +18,14 @@ def build_sidecar():
     tauri_binaries_dir = os.path.abspath(os.path.join(api_root, "..", "pos", "src-tauri", "binaries"))
     os.makedirs(tauri_binaries_dir, exist_ok=True)
 
+    # 0. Compile high-security Python modules into native C binaries (.pyd) via Cython
+    try:
+        from compile_native import compile_modules
+        print("[Security Hardening] Compiling critical modules to native C machine code (.pyd)...")
+        compile_modules()
+    except Exception as cy_err:
+        print(f"[Notice] Cython native compilation warning: {cy_err}")
+
     # Determine target triple
     target_triple = "x86_64-pc-windows-msvc"
     try:

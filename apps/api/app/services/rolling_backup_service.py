@@ -237,6 +237,9 @@ def verify_backup_file(backup_filename: str) -> Dict[str, Any]:
     # SQLite integrity check
     try:
         conn = sqlite3.connect(filepath)
+        if HAS_SQLCIPHER:
+            conn.execute(f"PRAGMA key = '{SQLCIPHER_PASSPHRASE}';")
+            conn.execute("PRAGMA cipher_compatibility = 4;")
         res = conn.execute("PRAGMA quick_check;").fetchone()
         conn.close()
         if not res or res[0] != "ok":
